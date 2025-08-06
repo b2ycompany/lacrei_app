@@ -1,1 +1,36 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"lacrei-app-escolas","appId":"1:103402952377:android:79013c607b7aa26031ad68","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"lacrei-app-escolas","configurations":{"android":"1:103402952377:android:79013c607b7aa26031ad68","ios":"1:103402952377:ios:baddecdfaab5bef231ad68","macos":"1:103402952377:ios:baddecdfaab5bef231ad68","web":"1:103402952377:web:0d0a77fa1c37885731ad68","windows":"1:103402952377:web:f2cbbc618cc02b1e31ad68"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "lacrei-app-escolas",
+          "appId": "1:103402952377:android:79013c607b7aa26031ad68",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "lacrei-app-escolas",
+          "configurations": {
+            "android": "1:103402952377:android:79013c607b7aa26031ad68",
+            "ios": "1:103402952377:ios:baddecdfaab5bef231ad68",
+            "macos": "1:103402952377:ios:baddecdfaab5bef231ad68",
+            "web": "1:103402952377:web:0d0a77fa1c37885731ad68",
+            "windows": "1:103402952377:web:f2cbbc618cc02b1e31ad68"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "source": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "frameworksBackend": {
+      "region": "us-central1"
+    }
+  }
+}

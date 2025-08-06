@@ -1,3 +1,5 @@
+// lib/screens/splash_screen.dart
+
 import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
@@ -88,7 +90,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _loadImage() async {
-    final ByteData data = await rootBundle.load('assets/lacre_latinha.png');
+    // CORREÇÃO: O caminho foi atualizado para corresponder à estrutura de pastas real.
+    final ByteData data = await rootBundle.load('assets/assets/lacre_latinha.png');
     final ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
     final ui.FrameInfo fi = await codec.getNextFrame();
     if (mounted) {
@@ -195,6 +198,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                           shape: BoxShape.circle,
                         ),
                       ),
+                      // O caminho deste GIF parece estar correto, pois está na raiz de 'assets/'
                       Image.asset(
                         'assets/mp4-unscreen.gif',
                         width: 250,
@@ -217,17 +221,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         child: Opacity(opacity: value, child: child),
                       );
                     },
-                    //
-                    // <<<<<<<<<<<<<<<<<<<< ALTERAÇÃO AQUI <<<<<<<<<<<<<<<<<<<<
-                    //
-                    // Removido o Padding e adicionado um 'width' para controlar o tamanho.
+                    // CORREÇÃO: O caminho foi atualizado para corresponder à estrutura de pastas real.
                     child: Image.asset(
-                      'assets/Marca_Lacrei.png',
+                      'assets/assets/Marca_Lacrei.png',
                       width: 180,
                     ),
-                    //
-                    // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-                    //
                   ),
                 ),
               ],
