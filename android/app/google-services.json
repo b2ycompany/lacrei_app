@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "103402952377",
+    "project_id": "lacrei-app-escolas",
+    "storage_bucket": "lacrei-app-escolas.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:103402952377:android:79013c607b7aa26031ad68",
+        "android_client_info": {
+          "package_name": "com.example.lacrei_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnMZ0UzFYMwaD9QYa5KPXJh-rGx4gV53Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

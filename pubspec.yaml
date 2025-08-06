@@ -1,0 +1,57 @@
+name: lacrei_app
+description: "Um projeto para a campanha Lacrei nas Escolas."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0'
+
+# Seção de dependências do aplicativo
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Pacotes de funcionalidades
+  lottie: ^3.1.2
+  introduction_screen: ^3.1.14
+  shared_preferences: ^2.2.3
+  http: ^1.2.1
+  mask_text_input_formatter: ^2.9.0
+  # CORREÇÃO APLICADA AQUI: Versão do intl atualizada
+  intl: ^0.20.2 
+
+  # Pacotes de design e animação
+  flutter_animate: ^4.5.0
+  flutter_tilt: ^3.0.1
+  font_awesome_flutter: ^10.7.0
+
+  # Pacotes do Firebase
+  firebase_core: ^2.32.0
+  firebase_auth: ^4.20.0
+  cloud_firestore: ^4.17.4
+  google_sign_in: ^6.2.1
+  firebase_storage: ^11.7.7 # Para upload e download de imagens
+   # PACOTES PARA IMAGEM E AVATAR
+  image_picker: ^1.1.2 # Para escolher imagens da galeria ou câmera
+  image_cropper: ^7.0.5 # Para cortar a imagem em um formato de avatar (quadrado/círculo)
+
+# Seção de dependências de desenvolvimento
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+# Seção de configurações específicas do Flutter
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/
+    - assets/animations/
+    - assets/mp4-unscreen.gif
