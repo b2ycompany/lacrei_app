@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
 import '../profile_selection_screen.dart';
 
+// ... (classe SchoolAdminDashboardScreen e _SchoolAdminDashboardScreenState, com as abas)
 class SchoolAdminDashboardScreen extends StatefulWidget {
   const SchoolAdminDashboardScreen({super.key});
 
@@ -16,7 +17,7 @@ class SchoolAdminDashboardScreen extends StatefulWidget {
 
 class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen> {
   String? _schoolId;
-  bool _isLoading = true; // Inicia como true para mostrar o loading inicial
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -70,7 +71,6 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    // ALTERADO: Comprimento do TabController para 3
     return DefaultTabController(
       length: 3, 
       child: Scaffold(
@@ -83,7 +83,6 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
               onPressed: _logout,
             ),
           ],
-          // ALTERADO: Adicionada a nova aba "Campanhas"
           bottom: const TabBar(
             tabs: [
               Tab(icon: Icon(Icons.campaign), text: "Campanhas"),
@@ -96,7 +95,6 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
             ? const Center(child: CircularProgressIndicator())
             : _schoolId == null
                 ? const Center(child: Text("Administrador não vinculado a uma escola."))
-                // ALTERADO: Adicionado o novo widget da aba de campanhas
                 : TabBarView(
                     children: [
                       CampaignApprovalView(schoolId: _schoolId!),
@@ -109,7 +107,7 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
   }
 }
 
-// NOVO: Widget completo para a aba de aprovação de campanhas
+// ... (widget CampaignApprovalView, sem alterações)
 class CampaignApprovalView extends StatelessWidget {
   final String schoolId;
   const CampaignApprovalView({super.key, required this.schoolId});
@@ -140,6 +138,7 @@ class CampaignApprovalView extends StatelessWidget {
           .collection('schools')
           .doc(schoolId)
           .collection('activeCampaigns')
+          .orderBy('startDate', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -201,8 +200,7 @@ class CampaignApprovalView extends StatelessWidget {
   }
 }
 
-
-// Widget para a aba de Registro de Coleta (sem alterações)
+// ### WIDGET DE REGISTRO DE COLETA MELHORADO ###
 class RegisterCollectionView extends StatefulWidget {
   final String schoolId;
   const RegisterCollectionView({super.key, required this.schoolId});
@@ -215,21 +213,42 @@ class _RegisterCollectionViewState extends State<RegisterCollectionView> {
   final _weightController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isRegistering = false;
+  
+  // NOVO: Estado para guardar a campanha selecionada
+  DocumentSnapshot? _selectedCampaign;
 
   Future<void> _registerCollection() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _selectedCampaign == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Por favor, preencha o peso e selecione uma campanha."), backgroundColor: Colors.red));
+      return;
+    }
+    
     setState(() => _isRegistering = true);
+    
     try {
       final weightToAdd = double.parse(_weightController.text.replaceAll(',', '.'));
       final schoolRef = FirebaseFirestore.instance.collection('schools').doc(widget.schoolId);
-      await schoolRef.update({'totalCollectedKg': FieldValue.increment(weightToAdd)});
+      final campaignRef = schoolRef.collection('activeCampaigns').doc(_selectedCampaign!.id);
+
+      // MELHORIA: Usa uma transação para garantir consistência
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // Incrementa o total da escola
+        transaction.update(schoolRef, {'totalCollectedKg': FieldValue.increment(weightToAdd)});
+        // Incrementa o total da campanha específica
+        transaction.update(campaignRef, {'collectedKg': FieldValue.increment(weightToAdd)});
+      });
+
+      // Adiciona um log da coleta (opcional, mas boa prática)
       await schoolRef.collection('collections').add({
         'weight': weightToAdd,
         'date': Timestamp.now(),
         'registeredBy': FirebaseAuth.instance.currentUser?.uid,
+        'campaignId': _selectedCampaign!.id,
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Coleta registrada!"), backgroundColor: Colors.green));
+
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Coleta registrada com sucesso!"), backgroundColor: Colors.green));
       _weightController.clear();
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: ${e.toString()}"), backgroundColor: Colors.red));
     } finally {
@@ -244,7 +263,7 @@ class _RegisterCollectionViewState extends State<RegisterCollectionView> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final schoolData = snapshot.data!.data() as Map<String, dynamic>;
-        final totalKg = (schoolData['totalCollectedKg'] as num).toDouble();
+        final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
 
         return Stack(
           children: [
@@ -258,13 +277,11 @@ class _RegisterCollectionViewState extends State<RegisterCollectionView> {
                     Text(schoolData['schoolName'] ?? 'Sua Escola', textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 24),
                     Card(
-                      elevation: 4, color: const Color.fromARGB(255, 63, 27, 102),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
                         child: Column(
                           children: [
-                            const Text("Total Já Arrecadado", style: TextStyle(fontSize: 18, color: Colors.white70)),
+                            const Text("Total Geral Arrecadado", style: TextStyle(fontSize: 18, color: Colors.white70)),
                             const SizedBox(height: 12),
                             Text("${totalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
                           ],
@@ -274,13 +291,42 @@ class _RegisterCollectionViewState extends State<RegisterCollectionView> {
                     const SizedBox(height: 40),
                     Text("Registrar Nova Coleta", style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white)),
                     const SizedBox(height: 16),
+                    
+                    // NOVO: Dropdown para selecionar a campanha ativa
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).collection('activeCampaigns').where('status', isEqualTo: 'active').snapshots(),
+                      builder: (context, campaignSnapshot) {
+                        if (!campaignSnapshot.hasData) {
+                          return const Text("A carregar campanhas...");
+                        }
+                        final activeCampaigns = campaignSnapshot.data!.docs;
+                        return DropdownButtonFormField<DocumentSnapshot>(
+                          value: _selectedCampaign,
+                          hint: const Text("Selecione a Campanha"),
+                          items: activeCampaigns.map((doc) {
+                            return DropdownMenuItem<DocumentSnapshot>(
+                              value: doc,
+                              child: Text(doc['campaignName'] ?? 'Campanha sem nome'),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedCampaign = value;
+                            });
+                          },
+                          validator: (value) => value == null ? 'Selecione uma campanha' : null,
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
                     TextFormField(
                       controller: _weightController,
                       decoration: const InputDecoration(labelText: 'Peso Arrecadado (kg)', hintText: 'Ex: 15,5'),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Por favor, insira o peso.';
-                        if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Por favor, insira um número válido.';
+                        if (value == null || value.isEmpty) return 'Insira o peso.';
+                        if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Insira um número válido.';
                         return null;
                       },
                     ),
@@ -303,7 +349,7 @@ class _RegisterCollectionViewState extends State<RegisterCollectionView> {
   }
 }
 
-// Widget para a aba de Solicitações Pendentes (sem alterações)
+// ... (widget PendingRequestsView, sem alterações)
 class PendingRequestsView extends StatelessWidget {
   final String schoolId;
   const PendingRequestsView({super.key, required this.schoolId});
