@@ -1,16 +1,19 @@
 // lib/screens/registration/adm_escola_registration_screen.dart
 
+// CORREÇÃO: Adicionada a importação que faltava para Uint8List
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'dart:io';
 import '../login_screen.dart';
 
 class AdmEscolaRegistrationScreen extends StatefulWidget {
@@ -76,9 +79,16 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
   }
 
   Future<void> _registerAdmEscola() async {
-    if (_passwordController.text != _confirmPasswordController.text) {
-      _showSnackBar("As senhas não coincidem."); return;
+    if (_currentStep != 2) return;
+    if (_schoolNameController.text.isEmpty || _schoolCepController.text.isEmpty || _responsibleNameController.text.isEmpty || _emailController.text.isEmpty) {
+      _showSnackBar("Por favor, preencha todos os campos obrigatórios antes de finalizar.");
+      return;
     }
+    if (_passwordController.text != _confirmPasswordController.text) {
+      _showSnackBar("As senhas não coincidem.");
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
@@ -88,8 +98,8 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
       final User? user = userCredential.user;
 
       if (user != null) {
-        String? schoolImageUrl;
         final schoolDocRef = FirebaseFirestore.instance.collection('schools').doc();
+        String? schoolImageUrl;
 
         if (_schoolImageBytes != null) {
           final storageRef = FirebaseStorage.instance.ref('school_avatars/${schoolDocRef.id}');
@@ -99,11 +109,12 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
 
         await schoolDocRef.set({
           'schoolName': _schoolNameController.text.trim(),
+          'schoolType': 'particular', 
+          'city': _schoolAddressCityController.text.trim(),
+          'cep': _schoolCepController.text.trim(),
+          'address': '${_schoolAddressController.text.trim()}, ${_schoolAddressNumberController.text.trim()}',
           'schoolPhone': _schoolPhoneController.text.trim(),
-          'schoolCep': _schoolCepController.text.trim(),
-          'schoolAddress': '${_schoolAddressController.text.trim()}, ${_schoolAddressNumberController.text.trim()}',
           'schoolDistrict': _schoolAddressDistrictController.text.trim(),
-          'schoolCity': _schoolAddressCityController.text.trim(),
           'schoolState': _schoolAddressStateController.text.trim(),
           'schoolImageUrl': schoolImageUrl,
           'totalCollectedKg': 0,
@@ -120,7 +131,7 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
         });
 
         if (mounted) {
-          _showSnackBar("Cadastro da escola realizado com sucesso!", isError: false);
+          _showSnackBar("Cadastro da escola e do administrador realizado com sucesso!", isError: false);
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const LoginScreen()),
             (route) => false,
@@ -248,7 +259,7 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
                      ),
                    ),
                    const SizedBox(height: 8),
-                   const Text("Avatar da Escola", style: TextStyle(color: Colors.white70)),
+                   const Text("Avatar da Escola (Opcional)", style: TextStyle(color: Colors.white70)),
                    const SizedBox(height: 24),
                    TextFormField(controller: _schoolNameController, decoration: _buildInputDecoration('Nome da Escola')),
                    const SizedBox(height: 16),

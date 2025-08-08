@@ -13,6 +13,8 @@ import 'registration/registration_selection_screen.dart';
 import 'forgot_password_screen.dart';
 import 'institution/instituicao_dashboard_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
+// NOVO: Import da dashboard da empresa
+import 'company/company_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,7 +29,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   bool _isLoading = false;
 
-  // CÓDIGO CORRIGIDO: Cole aqui o ID que você copiou do Google Cloud Console
   final String webClientId = "103402952377-d5ugb7u9ku9c7bclokhksqlhmaguvm6j.apps.googleusercontent.com";
 
   Future<void> _signInWithEmail() async {
@@ -62,7 +63,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
-      // CORREÇÃO: Passando o webClientId para o GoogleSignIn
       final GoogleSignInAccount? googleUser = await GoogleSignIn(clientId: webClientId).signIn();
       
       if (googleUser == null) {
@@ -113,6 +113,10 @@ class _LoginScreenState extends State<LoginScreen> {
           break;
         case 'administrador':
           destination = const AdminDashboardScreen();
+          break;
+        // NOVO: Adicionado o caso para o administrador da empresa
+        case 'company_admin':
+          destination = const CompanyDashboardScreen();
           break;
         default:
           _showError("Perfil de usuário não reconhecido.");

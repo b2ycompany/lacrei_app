@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'aluno_registration_screen.dart';
 import 'adm_escola_registration_screen.dart';
-import 'instituicao_registration_screen.dart'; // Nova importação
-import 'admin_registration_screen.dart';     // Nova importação
+import 'instituicao_registration_screen.dart';
+import 'admin_registration_screen.dart';
+// NOVO: Importação para a tela de cadastro de empresa
+import 'company_registration_screen.dart';
 
 class RegistrationSelectionScreen extends StatelessWidget {
   const RegistrationSelectionScreen({super.key});
@@ -43,7 +45,6 @@ class RegistrationSelectionScreen extends StatelessWidget {
               delay: 500.ms,
             ),
             const SizedBox(height: 20),
-            // NOVO BOTÃO
             _buildRegistrationButton(
               context: context,
               label: 'Sou uma Instituição',
@@ -51,12 +52,19 @@ class RegistrationSelectionScreen extends StatelessWidget {
               delay: 700.ms,
             ),
             const SizedBox(height: 20),
-            // NOVO BOTÃO
             _buildRegistrationButton(
               context: context,
               label: 'Sou Administrador',
               destination: const AdminRegistrationScreen(),
               delay: 900.ms,
+            ),
+            const SizedBox(height: 20),
+            // NOVO BOTÃO PARA EMPRESAS
+            _buildRegistrationButton(
+              context: context,
+              label: 'Sou uma Empresa',
+              destination: const CompanyRegistrationScreen(),
+              delay: 1100.ms,
             ),
           ],
         ),

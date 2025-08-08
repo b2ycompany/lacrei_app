@@ -6,6 +6,11 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../profile_selection_screen.dart';
 import 'partner_management_screen.dart';
 import 'campaign_management_screen.dart';
+import 'bulk_upload_screen.dart';
+import 'urn_management_screen.dart';
+import 'collection_route_screen.dart';
+// NOVO: Import da nova tela de gestão de escolas
+import 'school_management_screen.dart'; 
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
@@ -24,7 +29,6 @@ class AdminDashboardScreen extends StatelessWidget {
         );
       }
     } catch (e) {
-      // Em um app de produção, seria bom mostrar um SnackBar de erro aqui.
       // print("Erro ao fazer logoff: $e");
     }
   }
@@ -60,22 +64,31 @@ class AdminDashboardScreen extends StatelessWidget {
                 mainAxisSpacing: 16,
                 children: [
                   _buildDashboardCard(
-                    context: context,
-                    icon: Icons.stars,
-                    label: "Gerenciar Parceiros",
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen()));
-                    },
+                    context: context, icon: Icons.flag, label: "Gerenciar Campanhas",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CampaignManagementScreen())),
                   ),
                   _buildDashboardCard(
-                    context: context,
-                    icon: Icons.flag,
-                    label: "Gerenciar Campanhas",
-                    onTap: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (context) => const CampaignManagementScreen()));
-                    },
+                    context: context, icon: Icons.stars, label: "Gerenciar Parceiros",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen())),
                   ),
-                  // Você pode adicionar novos cards de funcionalidades aqui no futuro
+                  _buildDashboardCard(
+                    context: context, icon: Icons.upload, label: "Carga de Escolas",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BulkUploadScreen())),
+                  ),
+                  // NOVO: Card para a tela de gestão de escolas
+                  _buildDashboardCard(
+                    context: context, icon: Icons.school, label: "Gerenciar Escolas",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SchoolManagementScreen())),
+                  ),
+                   _buildDashboardCard(
+                    context: context, icon: Icons.inventory_2_outlined, label: "Gestão de Urnas",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UrnManagementScreen())),
+                  ),
+                  _buildDashboardCard(
+                    context: context, icon: Icons.route_outlined, label: "Rota de Coleta",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CollectionRouteScreen())),
+                    isHighlighted: true,
+                  ),
                 ],
               ),
             ),
@@ -90,10 +103,17 @@ class AdminDashboardScreen extends StatelessWidget {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    bool isHighlighted = false,
   }) {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: isHighlighted ? 8 : 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isHighlighted ? Colors.purpleAccent : Colors.transparent,
+          width: 2,
+        ),
+      ),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
@@ -102,11 +122,7 @@ class AdminDashboardScreen extends StatelessWidget {
           children: [
             Icon(icon, size: 48, color: Colors.purpleAccent),
             const SizedBox(height: 16),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
+            Text(label, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
       ),
