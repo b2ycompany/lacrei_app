@@ -1,6 +1,5 @@
 // lib/screens/registration/aluno_registration_screen.dart
 
-import 'dart:io';
 // CORREÇÃO: Adicionada a importação que faltava para Uint8List
 import 'dart:typed_data';
 import 'package:flutter/material.dart';

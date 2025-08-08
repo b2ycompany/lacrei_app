@@ -1,8 +1,6 @@
-// lib/screens/admin/collection_route_screen.dart
-
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class CollectionRouteScreen extends StatefulWidget {
   const CollectionRouteScreen({super.key});
@@ -12,43 +10,75 @@ class CollectionRouteScreen extends StatefulWidget {
 }
 
 class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
-  // Guarda os IDs das urnas selecionadas para a rota
-  final Set<String> _selectedUrnIds = {};
-  // Guarda a rota gerada para exibição
-  List<DocumentSnapshot> _generatedRoute = [];
-  bool _isRouteGenerated = false;
+  final Completer<GoogleMapController> _controller = Completer();
 
-  Future<void> _markAsCollected(String urnId) async {
-    try {
-      await FirebaseFirestore.instance.collection('urns').doc(urnId).update({
-        'status': 'Na Localização',
-        'lastFullTimestamp': null,
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Urna marcada como 'coletada'."), backgroundColor: Colors.green),
-        );
-        // Remove da rota gerada para atualizar a UI
-        setState(() {
-          _generatedRoute.removeWhere((doc) => doc.id == urnId);
-          if (_generatedRoute.isEmpty) {
-            _isRouteGenerated = false;
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erro ao atualizar status: ${e.toString()}"), backgroundColor: Colors.red),
-        );
-      }
-    }
+  static const LatLng _initialPosition = LatLng(-23.55052, -46.633308); // São Paulo
+  final Set<Marker> _markers = {};
+  final Set<Polyline> _polylines = {};
+  LatLng? _lastPosition;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
   }
 
-  void _generateRoute(List<DocumentSnapshot> fullUrns) {
+  Future<void> _loadInitialData() async {
+    setState(() => _isLoading = true);
+
+    // Exemplo de marcadores (substituir pelos dados reais)
+    _markers.addAll([
+      const Marker(
+        markerId: MarkerId('start'),
+        position: LatLng(-23.55052, -46.633308),
+        infoWindow: InfoWindow(title: 'Ponto Inicial'),
+      ),
+      const Marker(
+        markerId: MarkerId('end'),
+        position: LatLng(-23.551, -46.634),
+        infoWindow: InfoWindow(title: 'Destino Final'),
+      ),
+    ]);
+
+    // Exemplo de rota (substituir pelo cálculo real da rota)
+    _polylines.add(
+      const Polyline(
+        polylineId: PolylineId('route'),
+        points: [
+          LatLng(-23.55052, -46.633308),
+          LatLng(-23.551, -46.634),
+        ],
+        color: Colors.blue,
+        width: 5,
+      ),
+    );
+
+    _lastPosition = _initialPosition;
+
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _goToPosition(LatLng position) async {
+    final GoogleMapController controller = await _controller.future;
+    controller.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: position, zoom: 15),
+      ),
+    );
+  }
+
+  void _addMarker(LatLng position) {
+    final String markerId = DateTime.now().millisecondsSinceEpoch.toString();
     setState(() {
-      _generatedRoute = fullUrns.where((urn) => _selectedUrnIds.contains(urn.id)).toList();
-      _isRouteGenerated = true;
+      _markers.add(
+        Marker(
+          markerId: MarkerId(markerId),
+          position: position,
+          infoWindow: InfoWindow(title: 'Ponto ${_markers.length + 1}'),
+        ),
+      );
+      _lastPosition = position;
     });
   }
 
@@ -56,132 +86,48 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Gerar Rota de Coleta"),
-        // Se uma rota estiver gerada, mostra um botão para voltar à seleção
-        leading: _isRouteGenerated 
-          ? IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => setState(() {
-                _isRouteGenerated = false;
-                _selectedUrnIds.clear();
-              }),
-            )
-          : null,
+        title: const Text('Rota de Coleta'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.my_location),
+            onPressed: () {
+              if (_lastPosition != null) {
+                _goToPosition(_lastPosition!);
+              }
+            },
+          ),
+        ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('urns')
-            .where('status', isEqualTo: 'Cheia')
-            .orderBy('lastFullTimestamp', descending: false)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text("Erro ao carregar as urnas."));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Nenhuma urna cheia para coletar."));
-          }
-
-          final fullUrns = snapshot.data!.docs;
-
-          // Se a rota ainda não foi gerada, mostra a tela de seleção
-          if (!_isRouteGenerated) {
-            return _buildUrnSelectionView(fullUrns);
-          } else {
-            // Se a rota foi gerada, mostra a lista da rota
-            return _buildGeneratedRouteView();
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : GoogleMap(
+              initialCameraPosition: const CameraPosition(
+                target: _initialPosition,
+                zoom: 14,
+              ),
+              onMapCreated: (GoogleMapController controller) {
+                _controller.complete(controller);
+              },
+              markers: _markers,
+              polylines: _polylines,
+              onTap: _addMarker,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              mapType: MapType.normal,
+            ),
+      floatingActionButton: FloatingActionButton(
+        child: const Icon(Icons.add),
+        onPressed: () {
+          if (_lastPosition != null) {
+            _addMarker(
+              LatLng(
+                _lastPosition!.latitude + 0.0005,
+                _lastPosition!.longitude + 0.0005,
+              ),
+            );
           }
         },
       ),
-    );
-  }
-
-  Widget _buildUrnSelectionView(List<DocumentSnapshot> fullUrns) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text("Selecione as urnas para a rota de hoje", style: Theme.of(context).textTheme.headlineSmall),
-        ),
-        Expanded(
-          child: ListView.builder(
-            itemCount: fullUrns.length,
-            itemBuilder: (context, index) {
-              final urnDoc = fullUrns[index];
-              final data = urnDoc.data() as Map<String, dynamic>;
-              return CheckboxListTile(
-                title: Text(data['urnCode'] ?? 'Código da Urna'),
-                subtitle: Text(data['assignedToName'] ?? 'Local não informado'),
-                value: _selectedUrnIds.contains(urnDoc.id),
-                onChanged: (isSelected) {
-                  setState(() {
-                    if (isSelected == true) {
-                      _selectedUrnIds.add(urnDoc.id);
-                    } else {
-                      _selectedUrnIds.remove(urnDoc.id);
-                    }
-                  });
-                },
-              );
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.route),
-            label: Text("Gerar Rota (${_selectedUrnIds.length})"),
-            onPressed: _selectedUrnIds.isEmpty ? null : () => _generateRoute(fullUrns),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 50),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGeneratedRouteView() {
-    if (_generatedRoute.isEmpty) {
-      return const Center(child: Text("Nenhuma urna selecionada para esta rota."));
-    }
-    return ListView.builder(
-      itemCount: _generatedRoute.length,
-      itemBuilder: (context, index) {
-        final urnDoc = _generatedRoute[index];
-        final data = urnDoc.data() as Map<String, dynamic>;
-        final timestamp = data['lastFullTimestamp'] as Timestamp?;
-        final order = index + 1;
-
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("$order. ${data['urnCode'] ?? ''}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text("Local: ${data['assignedToName'] ?? 'Não informado'}"),
-                Text("Sinalizada em: ${timestamp != null ? DateFormat('dd/MM HH:mm').format(timestamp.toDate()) : 'N/A'}"),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.check),
-                    label: const Text("Marcar como Coletada"),
-                    onPressed: () => _markAsCollected(urnDoc.id),
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.green),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }

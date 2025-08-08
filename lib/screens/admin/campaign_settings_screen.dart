@@ -36,10 +36,10 @@ class _CampaignManagementScreenState extends State<CampaignManagementScreen> {
   void _showCampaignForm({DocumentSnapshot? campaign}) {
     final isEditing = campaign != null;
     final formKey = GlobalKey<FormState>();
-    final nameController = TextEditingController(text: isEditing ? campaign!['name'] : '');
-    final goalController = TextEditingController(text: isEditing ? campaign!['goalKg'].toString() : '');
-    DateTime startDate = isEditing ? (campaign!['startDate'] as Timestamp).toDate() : DateTime.now();
-    DateTime endDate = isEditing ? (campaign!['endDate'] as Timestamp).toDate() : DateTime.now().add(const Duration(days: 30));
+    final nameController = TextEditingController(text: isEditing ? campaign['name'] : '');
+    final goalController = TextEditingController(text: isEditing ? campaign['goalKg'].toString() : '');
+    DateTime startDate = isEditing ? (campaign['startDate'] as Timestamp).toDate() : DateTime.now();
+    DateTime endDate = isEditing ? (campaign['endDate'] as Timestamp).toDate() : DateTime.now().add(const Duration(days: 30));
 
     showModalBottomSheet(
       context: context,

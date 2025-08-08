@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+// CORREÇÃO: Alterado de 'package.' para 'package:'
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -13,8 +14,10 @@ import 'registration/registration_selection_screen.dart';
 import 'forgot_password_screen.dart';
 import 'institution/instituicao_dashboard_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
-// NOVO: Import da dashboard da empresa
 import 'company/company_dashboard_screen.dart';
+// CORREÇÃO: O caminho relativo está correto agora que o ficheiro existe
+import 'collector/collector_dashboard_screen.dart'; 
+import 'profile_selection_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -112,11 +115,14 @@ class _LoginScreenState extends State<LoginScreen> {
           destination = const InstituicaoDashboardScreen();
           break;
         case 'administrador':
+        case 'super_admin':
           destination = const AdminDashboardScreen();
           break;
-        // NOVO: Adicionado o caso para o administrador da empresa
         case 'company_admin':
           destination = const CompanyDashboardScreen();
+          break;
+        case 'collector':
+          destination = const CollectorDashboardScreen();
           break;
         default:
           _showError("Perfil de usuário não reconhecido.");
