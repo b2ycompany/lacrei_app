@@ -17,7 +17,6 @@ import 'admin/admin_dashboard_screen.dart';
 import 'company/company_dashboard_screen.dart';
 // CORREÇÃO: O caminho relativo está correto agora que o ficheiro existe
 import 'collector/collector_dashboard_screen.dart'; 
-import 'profile_selection_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

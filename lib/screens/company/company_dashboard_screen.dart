@@ -28,14 +28,14 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
 
     try {
       final weightToAdd = double.parse(_weightController.text.replaceAll(',', '.'));
-      final companyRef = FirebaseFirestore.instance.collection('companies').doc(_user!.uid);
+      final companyRef = FirebaseFirestore.instance.collection('companies').doc(_user.uid);
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         transaction.update(companyRef, {'totalCollectedKg': FieldValue.increment(weightToAdd)});
       });
 
       await companyRef.collection('collections').add({
-        'weight': weightToAdd, 'date': Timestamp.now(), 'registeredBy': _user!.displayName ?? _user!.email,
+        'weight': weightToAdd, 'date': Timestamp.now(), 'registeredBy': _user.displayName ?? _user.email,
       });
 
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Coleta registrada com sucesso!"), backgroundColor: Colors.green));
@@ -67,7 +67,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
         ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('companies').doc(_user!.uid).snapshots(),
+        stream: FirebaseFirestore.instance.collection('companies').doc(_user.uid).snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -125,7 +125,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                     ),
                     const Divider(height: 48),
                     // NOVO: Adicionada a visão de status da urna
-                    UrnStatusView(assignedToId: _user!.uid),
+                    UrnStatusView(assignedToId: _user.uid),
                   ],
                 ),
               ),

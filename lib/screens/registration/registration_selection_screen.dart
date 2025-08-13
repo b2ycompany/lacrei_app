@@ -6,7 +6,6 @@ import 'aluno_registration_screen.dart';
 import 'adm_escola_registration_screen.dart';
 import 'instituicao_registration_screen.dart';
 import 'admin_registration_screen.dart';
-// NOVO: Importação para a tela de cadastro de empresa
 import 'company_registration_screen.dart';
 
 class RegistrationSelectionScreen extends StatelessWidget {
@@ -31,9 +30,11 @@ class RegistrationSelectionScreen extends StatelessWidget {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ).animate().fade(duration: 500.ms),
             const SizedBox(height: 40),
+            
+            // CORREÇÃO APLICADA AQUI
             _buildRegistrationButton(
               context: context,
-              label: 'Sou Aluno',
+              label: 'Sou Aluno / Funcionário', // Texto do botão atualizado
               destination: const AlunoRegistrationScreen(),
               delay: 300.ms,
             ),
@@ -59,7 +60,6 @@ class RegistrationSelectionScreen extends StatelessWidget {
               delay: 900.ms,
             ),
             const SizedBox(height: 20),
-            // NOVO BOTÃO PARA EMPRESAS
             _buildRegistrationButton(
               context: context,
               label: 'Sou uma Empresa',

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_tilt/flutter_tilt.dart';
 import 'login_screen.dart';
-// IMPORTAÇÃO DA NOVA TELA
 import 'registration/registration_selection_screen.dart';
 
 class ProfileSelectionScreen extends StatefulWidget {
@@ -56,24 +55,26 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                         .animate().fade(delay: 400.ms, duration: 800.ms),
                     const SizedBox(height: 60),
 
-                    _ProfileButton(label: 'Aluno', onPressed: () => _navigateToLogin(context))
+                    _ProfileButton(label: 'Aluno / Funcionário', onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 600.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
-                    _ProfileButton(label: 'Adm. Escola', onPressed: () => _navigateToLogin(context))
+                    _ProfileButton(label: 'Admin. Escola', onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 800.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
                     _ProfileButton(label: 'Instituição', onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 1000.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
-                    _ProfileButton(label: 'Administrador', onPressed: () => _navigateToLogin(context))
+                    // BOTÃO DE EMPRESA ADICIONADO
+                    _ProfileButton(label: 'Empresa', onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 1200.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
+                    const SizedBox(height: 20),
+                    _ProfileButton(label: 'Administrador', onPressed: () => _navigateToLogin(context))
+                        .animate().fade(delay: 1400.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     
                     const SizedBox(height: 40),
                     
-                    // BOTÃO "CADASTRE-SE" CORRIGIDO
                     TextButton(
                       onPressed: () {
-                        // Navega para a nova tela de seleção de cadastro
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const RegistrationSelectionScreen()),

@@ -64,8 +64,8 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
           // Navega para a tela de ADIÇÃO
           Navigator.push(context, MaterialPageRoute(builder: (context) => const AddEditSchoolScreen()));
         },
-        child: const Icon(Icons.add),
         tooltip: "Adicionar Escola",
+        child: const Icon(Icons.add),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('schools').orderBy('schoolName').snapshots(),

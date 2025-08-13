@@ -1,12 +1,16 @@
 // lib/screens/registration/company_registration_screen.dart
 
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:lacrei_app/screens/login_screen.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'dart:io';
+import '../../widgets/terms_dialog.dart';
 
 class CompanyRegistrationScreen extends StatefulWidget {
   const CompanyRegistrationScreen({super.key});
@@ -21,64 +25,48 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
   final _cnpjController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  // NOVOS CONTROLLERS PARA O ENDEREÇO
-  final _cepController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _addressNumberController = TextEditingController();
-  final _addressDistrictController = TextEditingController();
   
   bool _isLoading = false;
-  final _cnpjMaskFormatter = MaskTextInputFormatter(mask: '##.###.###/####-##', filter: {"#": RegExp(r'[0-9]')});
-  final _cepMaskFormatter = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
-  final _cepFocusNode = FocusNode();
+  // NOVO: Variáveis para a imagem do logo
+  Uint8List? _companyImageBytes;
+  bool _termsAccepted = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _cepFocusNode.addListener(() {
-      if (!_cepFocusNode.hasFocus) _fetchAddressFromCep();
-    });
-  }
+  final _cnpjMaskFormatter = MaskTextInputFormatter(mask: '##.###.###/####-##', filter: {"#": RegExp(r'[0-9]')});
 
   @override
   void dispose() {
-    // ... dispose de todos os controllers ...
     _companyNameController.dispose();
     _cnpjController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    _cepController.dispose();
-    _addressController.dispose();
-    _addressNumberController.dispose();
-    _addressDistrictController.dispose();
-    _cepFocusNode.dispose();
     super.dispose();
   }
 
-  Future<void> _fetchAddressFromCep() async {
-    final cep = _cepMaskFormatter.getUnmaskedText();
-    if (cep.length != 8) return;
-    setState(() => _isLoading = true);
-    try {
-      final response = await http.get(Uri.parse('https://viacep.com.br/ws/$cep/json/'));
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['erro'] != true) {
-          setState(() {
-            _addressController.text = data['logradouro'];
-            _addressDistrictController.text = data['bairro'];
-          });
-        }
-      }
-    } catch (e) {
-      // Tratar erro
-    } finally {
-      if(mounted) setState(() => _isLoading = false);
+  // NOVO: Função para escolher e cortar a imagem do logo
+  Future<void> _pickImage() async {
+    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (pickedFile == null || !mounted) return;
+
+    final croppedFile = await ImageCropper().cropImage(
+      sourcePath: pickedFile.path,
+      aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
+      compressFormat: ImageCompressFormat.jpg,
+      uiSettings: [ WebUiSettings(context: context) ],
+    );
+    if (croppedFile != null) {
+      final bytes = await croppedFile.readAsBytes();
+      setState(() => _companyImageBytes = bytes);
     }
   }
 
+  // LÓGICA ATUALIZADA: para incluir o upload do logo e os termos
   Future<void> _registerCompany() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_termsAccepted) {
+      _showSnackBar("Você precisa de aceitar os Termos de Serviço.");
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
@@ -93,17 +81,21 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
       await user.updateDisplayName(companyName);
 
       final companyDocRef = FirebaseFirestore.instance.collection('companies').doc(user.uid);
+      String? companyImageUrl;
+
+      if (_companyImageBytes != null) {
+        final storageRef = FirebaseStorage.instance.ref('company_logos/${companyDocRef.id}');
+        await storageRef.putData(_companyImageBytes!);
+        companyImageUrl = await storageRef.getDownloadURL();
+      }
+
       await companyDocRef.set({
         'companyName': companyName,
         'cnpj': _cnpjController.text.trim(),
         'adminUid': user.uid,
+        'companyImageUrl': companyImageUrl, // Salva o URL do logo
         'totalCollectedKg': 0,
         'createdAt': Timestamp.now(),
-        // NOVOS CAMPOS DE ENDEREÇO
-        'cep': _cepController.text.trim(),
-        'address': _addressController.text.trim(),
-        'addressNumber': _addressNumberController.text.trim(),
-        'addressDistrict': _addressDistrictController.text.trim(),
       });
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
@@ -114,14 +106,31 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Empresa cadastrada com sucesso!"), backgroundColor: Colors.green));
-        Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
+        _showSnackBar("Empresa cadastrada com sucesso!", isError: false);
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
       }
+    } on FirebaseAuthException catch (e) {
+      _showSnackBar(e.message ?? "Erro desconhecido.");
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Ocorreu um erro: ${e.toString()}"), backgroundColor: Colors.red));
+      _showSnackBar("Ocorreu um erro: ${e.toString()}");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+  
+  void _showSnackBar(String message, {bool isError = true}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: isError ? Colors.redAccent : Colors.green),
+      );
+    }
+  }
+  
+  void _showTermsDialog() {
+    showDialog(context: context, builder: (context) => const TermsDialog());
   }
 
   @override
@@ -138,6 +147,22 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // NOVO: Widget para selecionar e pré-visualizar o logo
+                    GestureDetector(
+                      onTap: _pickImage,
+                      child: Container(
+                        height: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(25),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white54),
+                        ),
+                        child: _companyImageBytes != null
+                          ? ClipRRect(borderRadius: BorderRadius.circular(11), child: Image.memory(_companyImageBytes!, fit: BoxFit.contain))
+                          : const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.add_a_photo_outlined, size: 40), SizedBox(height: 8), Text("Selecionar Logo")])),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     TextFormField(controller: _companyNameController, decoration: const InputDecoration(labelText: "Nome da Empresa"), validator: (v) => v!.isEmpty ? "Campo obrigatório" : null),
                     const SizedBox(height: 16),
                     TextFormField(controller: _cnpjController, decoration: const InputDecoration(labelText: "CNPJ"), keyboardType: TextInputType.number, inputFormatters: [_cnpjMaskFormatter], validator: (v) => v!.isEmpty ? "Campo obrigatório" : null),
@@ -146,20 +171,15 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
                     const SizedBox(height: 16),
                     TextFormField(controller: _passwordController, decoration: const InputDecoration(labelText: "Senha"), obscureText: true, validator: (v) => v!.length < 6 ? "A senha deve ter no mínimo 6 caracteres" : null),
                     const SizedBox(height: 24),
-                    const Text("Endereço", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 16),
-                    TextFormField(controller: _cepController, focusNode: _cepFocusNode, decoration: const InputDecoration(labelText: "CEP"), inputFormatters: [_cepMaskFormatter], keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? "Obrigatório" : null),
-                    const SizedBox(height: 16),
-                    TextFormField(controller: _addressController, decoration: const InputDecoration(labelText: "Rua / Logradouro"), validator: (v) => v!.isEmpty ? "Obrigatório" : null),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(child: TextFormField(controller: _addressNumberController, decoration: const InputDecoration(labelText: "Número"), keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? "Obrigatório" : null)),
-                        const SizedBox(width: 16),
-                        Expanded(child: TextFormField(controller: _addressDistrictController, decoration: const InputDecoration(labelText: "Bairro"), validator: (v) => v!.isEmpty ? "Obrigatório" : null)),
-                      ],
+                    // NOVO: Checkbox de termos de aceite
+                    CheckboxListTile(
+                      title: const Text("Li e aceito os Termos de Serviço e a Política de Privacidade."),
+                      subtitle: GestureDetector(onTap: _showTermsDialog, child: const Text("Clique para ler os termos.", style: TextStyle(color: Colors.purpleAccent, decoration: TextDecoration.underline))),
+                      value: _termsAccepted,
+                      onChanged: (val) => setState(() => _termsAccepted = val!),
+                      controlAffinity: ListTileControlAffinity.leading,
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: _isLoading ? null : _registerCompany,
                       style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),

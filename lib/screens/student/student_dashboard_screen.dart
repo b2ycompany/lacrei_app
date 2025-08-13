@@ -5,18 +5,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lacrei_app/screens/ranking_screen.dart';
-// O import abaixo pode ser removido se o modelo SchoolProgress não for mais usado diretamente aqui
-// import '../../models/school_progress.dart'; 
 import '../profile_selection_screen.dart';
 
-// LÓGICA FINAL: Modelo de dados simplificado para a nova lógica da dashboard
+// Modelo de dados final para a dashboard
 class GamifiedDashboardData {
   final String studentName;
   final String studentImageUrl;
   final String schoolLinkStatus;
   final String schoolId;
   final String schoolName;
-  final DocumentSnapshot? activeCampaign; // Agora buscamos uma única campanha ativa da subcoleção
+  final String luckyNumber;
+  final DocumentSnapshot? activeCampaign;
 
   GamifiedDashboardData({
     required this.studentName,
@@ -24,6 +23,7 @@ class GamifiedDashboardData {
     required this.schoolLinkStatus,
     required this.schoolId,
     required this.schoolName,
+    required this.luckyNumber,
     this.activeCampaign,
   });
 }
@@ -43,7 +43,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     _dashboardData = _fetchDashboardData();
   }
 
-  // LÓGICA FINAL: Função de busca de dados completamente atualizada para o fluxo correto
+  // Lógica de busca de dados final e correta
   Future<GamifiedDashboardData> _fetchDashboardData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("Usuário não logado.");
@@ -54,8 +54,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final userData = userDoc.data()!;
     final schoolId = userData['schoolId'] as String?;
     final schoolLinkStatus = userData['schoolLinkStatus'] as String? ?? 'none';
+    final luckyNumber = userData['luckyNumber'] as String? ?? 'N/A';
     
-    // Se o aluno não estiver vinculado e aprovado, retornamos os dados básicos
     if (schoolId == null || schoolLinkStatus != 'approved') {
       return GamifiedDashboardData(
         studentName: userData['name'] ?? 'Aluno(a)',
@@ -63,19 +63,20 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         schoolLinkStatus: schoolLinkStatus,
         schoolId: '',
         schoolName: '',
+        luckyNumber: luckyNumber,
       );
     }
 
     final schoolDoc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).get();
     if (!schoolDoc.exists) throw Exception("Escola não encontrada.");
 
-    // A MUDANÇA PRINCIPAL: Busca a campanha na subcoleção da escola com status 'active'
+    // Busca a campanha na subcoleção da escola com status 'active'
     final activeCampaignSnapshot = await FirebaseFirestore.instance
         .collection('schools')
         .doc(schoolId)
         .collection('activeCampaigns')
         .where('status', isEqualTo: 'active')
-        .limit(1) // Pega a primeira campanha ativa que encontrar
+        .limit(1)
         .get();
 
     return GamifiedDashboardData(
@@ -85,6 +86,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       schoolId: schoolId,
       schoolName: schoolDoc.data()?['schoolName'] ?? 'Nome da Escola',
       activeCampaign: activeCampaignSnapshot.docs.isNotEmpty ? activeCampaignSnapshot.docs.first : null,
+      luckyNumber: luckyNumber,
     );
   }
 
@@ -186,7 +188,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  // ### WIDGET DA DASHBOARD GAMIFICADA E REDESENHADA ###
   Widget _buildApprovedDashboard(GamifiedDashboardData data) {
     final campaignData = data.activeCampaign!.data() as Map<String, dynamic>;
     final prizeName = campaignData['prizeName'] ?? 'Prêmio incrível!';
@@ -246,44 +247,38 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       const SizedBox(height: 12),
                       Text(prizeName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Text(prizeDescription, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, color: Colors.white70)),
+                      Text(prizeDescription, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.white70)),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 24),
-              const Text('PATROCINADORES OFICIAIS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.5, color: Colors.white70)),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 120,
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('partners').snapshots(),
-                  builder: (context, snapshot) {
-                    if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                    final partners = snapshot.data!.docs;
-                    return ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: partners.length,
-                      itemBuilder: (context, index) {
-                        final partner = partners[index].data() as Map<String, dynamic>;
-                        return Card(
-                          elevation: 4,
-                          child: Container(
-                            width: 150,
-                            padding: const EdgeInsets.all(8),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Expanded(child: Image.network(partner['imageUrl'] ?? '', fit: BoxFit.contain, errorBuilder: (c, e, s) => const Icon(Icons.business))),
-                                const SizedBox(height: 8),
-                                Text(partner['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis),
-                              ],
-                            ),
+               Card(
+                color: const Color.fromARGB(255, 26, 12, 41),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.confirmation_number_outlined, color: Colors.amber, size: 28),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text.rich(
+                          TextSpan(
+                            text: "Seu Nº da Sorte: ",
+                            style: const TextStyle(fontSize: 16),
+                            children: [
+                              TextSpan(
+                                text: data.luckyNumber,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                              )
+                            ]
                           ),
-                        );
-                      },
-                    );
-                  },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
