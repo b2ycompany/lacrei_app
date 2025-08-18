@@ -7,12 +7,10 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'dart:io';
-
-// CORREÇÃO: Removido o import 'dart:typed_data' que não estava a ser utilizado.
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 class AddEditPartnerScreen extends StatefulWidget {
   final DocumentSnapshot? partner;
-
   const AddEditPartnerScreen({super.key, this.partner});
 
   @override
@@ -23,26 +21,31 @@ class _AddEditPartnerScreenState extends State<AddEditPartnerScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
+  late TextEditingController _contactEmailController;
+  late TextEditingController _contactPhoneController;
   
   CroppedFile? _imageFile;
   String? _existingImageUrl;
   bool _isLoading = false;
 
-  // CORREÇÃO: O método initState foi reescrito para ser mais claro e evitar os erros de sintaxe.
+  final _phoneMaskFormatter = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
+
   @override
   void initState() {
     super.initState();
-    final bool isEditing = widget.partner != null;
+    final isEditing = widget.partner != null;
     
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
+    _contactEmailController = TextEditingController();
+    _contactPhoneController = TextEditingController();
 
     if (isEditing) {
       final data = widget.partner!.data() as Map<String, dynamic>?;
-      
-      // Atribui os valores de forma segura, garantindo que não sejam nulos.
       _nameController.text = data?['name'] as String? ?? '';
       _descriptionController.text = data?['description'] as String? ?? '';
+      _contactEmailController.text = data?['contactEmail'] as String? ?? '';
+      _contactPhoneController.text = data?['contactPhone'] as String? ?? '';
       _existingImageUrl = data?['imageUrl'] as String?;
     }
   }
@@ -51,6 +54,8 @@ class _AddEditPartnerScreenState extends State<AddEditPartnerScreen> {
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
+    _contactEmailController.dispose();
+    _contactPhoneController.dispose();
     super.dispose();
   }
 
@@ -61,6 +66,7 @@ class _AddEditPartnerScreenState extends State<AddEditPartnerScreen> {
     final croppedFile = await ImageCropper().cropImage(
       sourcePath: pickedFile.path,
       aspectRatio: const CropAspectRatio(ratioX: 16, ratioY: 9),
+      compressFormat: ImageCompressFormat.jpg,
       uiSettings: [ WebUiSettings(context: context) ],
     );
 
@@ -78,15 +84,14 @@ class _AddEditPartnerScreenState extends State<AddEditPartnerScreen> {
       _showSnackBar("Por favor, selecione uma imagem.", isError: true);
       return;
     }
-    
     setState(() => _isLoading = true);
 
     try {
       String imageUrl = _existingImageUrl ?? '';
+      final docId = widget.partner?.id ?? FirebaseFirestore.instance.collection('partners').doc().id;
 
       if (_imageFile != null) {
         final imageBytes = await _imageFile!.readAsBytes();
-        final docId = widget.partner?.id ?? FirebaseFirestore.instance.collection('partners').doc().id;
         final storageRef = FirebaseStorage.instance.ref('partner_images/$docId');
         await storageRef.putData(imageBytes);
         imageUrl = await storageRef.getDownloadURL();
@@ -96,17 +101,18 @@ class _AddEditPartnerScreenState extends State<AddEditPartnerScreen> {
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'imageUrl': imageUrl,
-        'createdAt': widget.partner == null ? Timestamp.now() : (widget.partner!.data() as Map<String, dynamic>)['createdAt'],
+        'contactEmail': _contactEmailController.text.trim(),
+        'contactPhone': _contactPhoneController.text.trim(),
+        'createdAt': widget.partner?.data() != null ? (widget.partner!.data() as Map<String, dynamic>)['createdAt'] : Timestamp.now(),
       };
 
       if (widget.partner != null) {
         await FirebaseFirestore.instance.collection('partners').doc(widget.partner!.id).update(partnerData);
-        _showSnackBar("Parceiro atualizado com sucesso!", isError: false);
       } else {
-        await FirebaseFirestore.instance.collection('partners').add(partnerData);
-        _showSnackBar("Parceiro adicionado com sucesso!", isError: false);
+        await FirebaseFirestore.instance.collection('partners').doc(docId).set(partnerData);
       }
-
+      
+      _showSnackBar("Parceiro salvo com sucesso!", isError: false);
       if (mounted) Navigator.pop(context);
 
     } catch (e) {
@@ -171,6 +177,25 @@ class _AddEditPartnerScreenState extends State<AddEditPartnerScreen> {
                     controller: _descriptionController,
                     decoration: const InputDecoration(labelText: "Descrição da Promoção"),
                     maxLines: 3,
+                    validator: (value) => value == null || value.isEmpty ? "Campo obrigatório" : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _contactEmailController,
+                    decoration: const InputDecoration(labelText: "E-mail de Contato na Empresa"),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return "Campo obrigatório";
+                      if (!value.contains('@')) return "E-mail inválido";
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _contactPhoneController,
+                    decoration: const InputDecoration(labelText: "Telefone de Contato"),
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [_phoneMaskFormatter],
                     validator: (value) => value == null || value.isEmpty ? "Campo obrigatório" : null,
                   ),
                   const SizedBox(height: 32),

@@ -13,7 +13,6 @@ import 'dart:convert';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
-import 'dart:io';
 import '../login_screen.dart';
 import '../../widgets/terms_dialog.dart';
 import '../../widgets/guardian_terms_dialog.dart';

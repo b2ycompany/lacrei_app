@@ -21,11 +21,15 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
   late TextEditingController _cityController;
   late TextEditingController _cepController;
   late TextEditingController _addressController;
+  // NOVOS CONTROLLERS
+  late TextEditingController _adminNameController;
+  late TextEditingController _contactPhoneController;
 
-  String _selectedSchoolType = 'publica';
+  String _selectedSchoolType = 'particular';
   bool _isLoading = false;
 
   final _cepMaskFormatter = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
+  final _phoneMaskFormatter = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _cepFocusNode = FocusNode();
 
   @override
@@ -36,7 +40,9 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
     _cityController = TextEditingController(text: data?['city']);
     _cepController = TextEditingController(text: data?['cep']);
     _addressController = TextEditingController(text: data?['address']);
-    _selectedSchoolType = data?['schoolType'] ?? 'publica';
+    _adminNameController = TextEditingController(text: data?['adminName']);
+    _contactPhoneController = TextEditingController(text: data?['contactPhone']);
+    _selectedSchoolType = data?['schoolType'] ?? 'particular';
     _cepFocusNode.addListener(() {
       if (!_cepFocusNode.hasFocus) _fetchAddressFromCep();
     });
@@ -48,6 +54,8 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
     _cityController.dispose();
     _cepController.dispose();
     _addressController.dispose();
+    _adminNameController.dispose();
+    _contactPhoneController.dispose();
     _cepFocusNode.dispose();
     super.dispose();
   }
@@ -85,6 +93,8 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
         'city': _cityController.text.trim(),
         'cep': _cepController.text.trim(),
         'address': _addressController.text.trim(),
+        'adminName': _adminNameController.text.trim(),
+        'contactPhone': _contactPhoneController.text.trim(),
         'totalCollectedKg': widget.school != null ? (widget.school!.data() as Map<String, dynamic>)['totalCollectedKg'] : 0,
       };
 
@@ -126,15 +136,23 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
                 children: [
                   TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nome da Escola'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
                   const SizedBox(height: 16),
+                  // CAMPO ATUALIZADO PARA DROPDOWN
                   DropdownButtonFormField<String>(
                     value: _selectedSchoolType,
                     decoration: const InputDecoration(labelText: 'Tipo de Escola'),
                     items: const [
-                      DropdownMenuItem(value: 'publica', child: Text('Pública')),
+                      DropdownMenuItem(value: 'municipal', child: Text('Municipal')),
+                      DropdownMenuItem(value: 'estadual', child: Text('Estadual')),
                       DropdownMenuItem(value: 'particular', child: Text('Particular')),
+                      DropdownMenuItem(value: 'faculdade', child: Text('Faculdade')),
                     ],
                     onChanged: (v) => setState(() => _selectedSchoolType = v!),
                   ),
+                  const SizedBox(height: 16),
+                  // NOVOS CAMPOS
+                  TextFormField(controller: _adminNameController, decoration: const InputDecoration(labelText: 'Nome do Admin da Escola'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                  const SizedBox(height: 16),
+                  TextFormField(controller: _contactPhoneController, decoration: const InputDecoration(labelText: 'Telefone de Contato'), inputFormatters: [_phoneMaskFormatter], keyboardType: TextInputType.phone, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
                   const SizedBox(height: 16),
                   TextFormField(controller: _cepController, focusNode: _cepFocusNode, decoration: const InputDecoration(labelText: 'CEP'), inputFormatters: [_cepMaskFormatter], keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
                   const SizedBox(height: 16),

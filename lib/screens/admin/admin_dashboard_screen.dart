@@ -9,8 +9,9 @@ import 'campaign_management_screen.dart';
 import 'bulk_upload_screen.dart';
 import 'urn_management_screen.dart';
 import 'collection_route_screen.dart';
-// NOVO: Import da nova tela de gestão de escolas
-import 'school_management_screen.dart'; 
+import 'school_management_screen.dart';
+import 'sales_management_screen.dart';
+import 'sponsorship_plans_screen.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
@@ -29,7 +30,7 @@ class AdminDashboardScreen extends StatelessWidget {
         );
       }
     } catch (e) {
-      // print("Erro ao fazer logoff: $e");
+      // Em um app de produção, seria bom mostrar um SnackBar de erro aqui.
     }
   }
 
@@ -62,31 +63,43 @@ class AdminDashboardScreen extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
+                childAspectRatio: 1.2,
                 children: [
+                  // FUNCIONALIDADES EXISTENTES (MANTIDAS)
                   _buildDashboardCard(
-                    context: context, icon: Icons.flag, label: "Gerenciar Campanhas",
+                    context: context, icon: Icons.flag, label: "Gerenciar Campanhas", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CampaignManagementScreen())),
                   ),
                   _buildDashboardCard(
-                    context: context, icon: Icons.stars, label: "Gerenciar Parceiros",
+                    context: context, icon: Icons.stars, label: "Gerenciar Parceiros", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen())),
                   ),
                   _buildDashboardCard(
-                    context: context, icon: Icons.upload, label: "Carga de Escolas",
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BulkUploadScreen())),
-                  ),
-                  // NOVO: Card para a tela de gestão de escolas
-                  _buildDashboardCard(
-                    context: context, icon: Icons.school, label: "Gerenciar Escolas",
+                    context: context, icon: Icons.school, label: "Gerenciar Escolas", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SchoolManagementScreen())),
                   ),
-                   _buildDashboardCard(
-                    context: context, icon: Icons.inventory_2_outlined, label: "Gestão de Urnas",
+                  _buildDashboardCard(
+                    context: context, icon: Icons.inventory_2_outlined, label: "Gestão de Urnas", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UrnManagementScreen())),
                   ),
                   _buildDashboardCard(
-                    context: context, icon: Icons.route_outlined, label: "Rota de Coleta",
+                    context: context, icon: Icons.route_outlined, label: "Rota de Coleta", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CollectionRouteScreen())),
+                  ),
+                  _buildDashboardCard(
+                    context: context, icon: Icons.upload, label: "Carga de Escolas", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BulkUploadScreen())),
+                  ),
+                  
+                  // NOVAS FUNCIONALIDADES ADICIONADAS
+                  _buildDashboardCard(
+                    context: context, icon: Icons.group_add, label: "Equipe de Vendas", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesManagementScreen())),
+                    isHighlighted: true,
+                  ),
+                  _buildDashboardCard(
+                    context: context, icon: Icons.monetization_on, label: "Planos de Patrocínio", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SponsorshipPlansScreen())),
                     isHighlighted: true,
                   ),
                 ],
@@ -98,21 +111,12 @@ class AdminDashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDashboardCard({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool isHighlighted = false,
-  }) {
+  Widget _buildDashboardCard({required BuildContext context, required IconData icon, required String label, required VoidCallback onTap, bool isHighlighted = false}) {
     return Card(
       elevation: isHighlighted ? 8 : 4,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isHighlighted ? Colors.purpleAccent : Colors.transparent,
-          width: 2,
-        ),
+        side: BorderSide(color: isHighlighted ? Colors.purpleAccent : Colors.transparent, width: 2),
       ),
       child: InkWell(
         onTap: onTap,

@@ -77,6 +77,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   final int _numberOfLacres = 40;
   bool _areLacresInitialized = false;
   ui.Image? _lacreImage;
+  Timer? _navigationTimer;
 
   @override
   void initState() {
@@ -90,7 +91,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _loadImage() async {
-    // CORREÇÃO: O caminho foi atualizado para corresponder à estrutura de pastas real.
     final ByteData data = await rootBundle.load('assets/assets/lacre_latinha.png');
     final ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
     final ui.FrameInfo fi = await codec.getNextFrame();
@@ -111,7 +111,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     Timer(textAnimationDelay, () {
       if (mounted) setState(() => _isTextVisible = true);
     });
-    Timer(transitionDelay, () {
+
+    _navigationTimer = Timer(transitionDelay, () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
@@ -131,6 +132,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   void dispose() {
+    // ESTA É A CORREÇÃO DEFINITIVA
+    _navigationTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
@@ -198,7 +201,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                           shape: BoxShape.circle,
                         ),
                       ),
-                      // O caminho deste GIF parece estar correto, pois está na raiz de 'assets/'
                       Image.asset(
                         'assets/mp4-unscreen.gif',
                         width: 250,
@@ -221,7 +223,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                         child: Opacity(opacity: value, child: child),
                       );
                     },
-                    // CORREÇÃO: O caminho foi atualizado para corresponder à estrutura de pastas real.
                     child: Image.asset(
                       'assets/assets/Marca_Lacrei.png',
                       width: 180,

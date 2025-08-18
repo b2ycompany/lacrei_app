@@ -3,8 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import '../profile_selection_screen.dart';
 
 // REUTILIZANDO O WIDGET DE GESTÃO DE URNAS
 import '../school_admin/school_admin_dashboard_screen.dart'; 

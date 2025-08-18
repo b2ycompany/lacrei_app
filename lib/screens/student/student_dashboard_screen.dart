@@ -247,7 +247,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       const SizedBox(height: 12),
                       Text(prizeName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Text(prizeDescription, textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.white70)),
+                      Text(prizeDescription, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, color: Colors.white70)),
                     ],
                   ),
                 ),

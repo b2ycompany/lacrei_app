@@ -9,7 +9,6 @@ import 'package:lacrei_app/screens/login_screen.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
-import 'dart:io';
 import '../../widgets/terms_dialog.dart';
 
 class CompanyRegistrationScreen extends StatefulWidget {

@@ -5,8 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'aluno_registration_screen.dart';
 import 'adm_escola_registration_screen.dart';
 import 'instituicao_registration_screen.dart';
-import 'admin_registration_screen.dart';
-import 'company_registration_screen.dart';
+import 'company_registration_screen.dart'; // Import da tela de empresa
 
 class RegistrationSelectionScreen extends StatelessWidget {
   const RegistrationSelectionScreen({super.key});
@@ -31,10 +30,10 @@ class RegistrationSelectionScreen extends StatelessWidget {
             ).animate().fade(duration: 500.ms),
             const SizedBox(height: 40),
             
-            // CORREÇÃO APLICADA AQUI
+            // ALTERADO: Texto do botão atualizado
             _buildRegistrationButton(
               context: context,
-              label: 'Sou Aluno / Funcionário', // Texto do botão atualizado
+              label: 'Sou Aluno / Funcionário',
               destination: const AlunoRegistrationScreen(),
               delay: 300.ms,
             ),
@@ -53,19 +52,15 @@ class RegistrationSelectionScreen extends StatelessWidget {
               delay: 700.ms,
             ),
             const SizedBox(height: 20),
-            _buildRegistrationButton(
-              context: context,
-              label: 'Sou Administrador',
-              destination: const AdminRegistrationScreen(),
-              delay: 900.ms,
-            ),
-            const SizedBox(height: 20),
+            // NOVO: Botão para cadastro de empresa
             _buildRegistrationButton(
               context: context,
               label: 'Sou uma Empresa',
               destination: const CompanyRegistrationScreen(),
-              delay: 1100.ms,
+              delay: 900.ms,
             ),
+            // O botão para 'Administrador' foi removido desta tela pública por questões de segurança,
+            // como discutimos. Novos super administradores devem ser criados por quem já é admin.
           ],
         ),
       ),

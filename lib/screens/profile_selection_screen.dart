@@ -64,12 +64,8 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                     _ProfileButton(label: 'Instituição', onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 1000.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
-                    // BOTÃO DE EMPRESA ADICIONADO
                     _ProfileButton(label: 'Empresa', onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 1200.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
-                    const SizedBox(height: 20),
-                    _ProfileButton(label: 'Administrador', onPressed: () => _navigateToLogin(context))
-                        .animate().fade(delay: 1400.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     
                     const SizedBox(height: 40),
                     
@@ -88,6 +84,7 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                         ),
                       ),
                     ),
+                    // O botão para o Portal de Vendedores foi removido daqui.
                   ],
                 ),
               ),
