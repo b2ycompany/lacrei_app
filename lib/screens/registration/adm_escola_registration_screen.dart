@@ -1,6 +1,5 @@
 // lib/screens/registration/adm_escola_registration_screen.dart
 
-// --- CORREÇÃO: Ajustado de 'dart.typed_data' para 'dart:typed_data' ---
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -126,7 +125,7 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
       await batch.commit();
 
       if (mounted) {
-        _showSnackBar("Cadastro da escola e do administrador realizado com sucesso!", isError: false);
+        _showSnackBar("Cadastro da instituição e do administrador realizado com sucesso!", isError: false);
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
           (route) => false,
@@ -220,7 +219,7 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Cadastro de Admin da Escola")),
+      appBar: AppBar(title: const Text("Cadastro de Admin da Escola/Faculdade")),
       body: Stack(
         children: [
           Stepper(
@@ -232,6 +231,7 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
               Step(
                 title: const Text('Admin'),
                 isActive: _currentStep >= 0,
+                // --- CORREÇÃO: Conteúdo do formulário restaurado ---
                 content: Form(
                   key: _formKeyStep0,
                   child: Column(children: [
@@ -248,12 +248,13 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
                 ),
               ),
               Step(
-                title: const Text('Escola'),
+                title: const Text('Instituição'),
                 isActive: _currentStep >= 1,
                 content: Form(
                   key: _formKeyStep1,
                   child: Column(children: [
                      GestureDetector(
+                       // A chamada para _pickImage está aqui, o que corrige o outro erro
                        onTap: _pickImage,
                        child: Stack(
                          alignment: Alignment.bottomRight,
@@ -272,17 +273,18 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
                        ),
                      ),
                      const SizedBox(height: 8),
-                     const Text("Avatar da Escola (Opcional)", style: TextStyle(color: Colors.white70)),
+                     const Text("Avatar da Instituição (Opcional)", style: TextStyle(color: Colors.white70)),
                      const SizedBox(height: 24),
-                     TextFormField(controller: _schoolNameController, decoration: _buildInputDecoration('Nome da Escola'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
+                     TextFormField(controller: _schoolNameController, decoration: _buildInputDecoration('Nome da Escola/Faculdade'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
                      const SizedBox(height: 16),
-                     TextFormField(controller: _schoolPhoneController, decoration: _buildInputDecoration('Telefone da Escola'), inputFormatters: [_phoneMaskFormatter], keyboardType: TextInputType.phone),
+                     TextFormField(controller: _schoolPhoneController, decoration: _buildInputDecoration('Telefone da Escola/Faculdade'), inputFormatters: [_phoneMaskFormatter], keyboardType: TextInputType.phone),
                   ]).animate().fade(duration: 400.ms).slideY(begin: 0.2),
                 ),
               ),
               Step(
                 title: const Text('Endereço'),
                 isActive: _currentStep >= 2,
+                // --- CORREÇÃO: Conteúdo do formulário restaurado ---
                 content: Form(
                   key: _formKeyStep2,
                   child: Column(children: [

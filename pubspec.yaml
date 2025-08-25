@@ -29,6 +29,7 @@ dependencies:
   image_cropper: ^7.0.5
   google_maps_flutter: ^2.9.0
   url_strategy: ^0.2.0
+  google_maps_flutter_web: ^0.5.4+2
 
 dev_dependencies:
   flutter_test:

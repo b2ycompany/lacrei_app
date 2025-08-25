@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
 import '../profile_selection_screen.dart';
@@ -15,24 +16,28 @@ class CollectorDashboardScreen extends StatefulWidget {
 }
 
 class _CollectorDashboardScreenState extends State<CollectorDashboardScreen> {
-  Future<void> _markAsCollected(String urnId) async {
-    try {
-      await FirebaseFirestore.instance.collection('urns').doc(urnId).update({
-        'status': 'Na Localização',
-        'lastFullTimestamp': null,
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Urna marcada como 'coletada'."), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erro ao atualizar status: ${e.toString()}"), backgroundColor: Colors.red),
-        );
-      }
-    }
+
+  // --- NOVO: Lógica para criar os marcadores do mapa ---
+  Set<Marker> _createMarkers(List<QueryDocumentSnapshot> docs) {
+    return docs.map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      
+      // Assumindo que você tem latitude e longitude no seu documento
+      final double lat = data['latitude'] ?? 0.0;
+      final double lng = data['longitude'] ?? 0.0;
+      final String urnCode = data['urnCode'] ?? 'Código da Urna';
+      final String locationName = data['assignedToName'] ?? 'Não informado';
+
+      return Marker(
+        markerId: MarkerId(doc.id),
+        position: LatLng(lat, lng),
+        infoWindow: InfoWindow(
+          title: urnCode,
+          snippet: locationName,
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+      );
+    }).toSet();
   }
 
   Future<void> _logout() async {
@@ -89,60 +94,21 @@ class _CollectorDashboardScreenState extends State<CollectorDashboardScreen> {
             );
           }
 
-          final fullUrns = snapshot.data!.docs;
+          final fullUrnsDocs = snapshot.data!.docs;
+          final markers = _createMarkers(fullUrnsDocs);
 
-          return ListView.builder(
-            itemCount: fullUrns.length,
-            itemBuilder: (context, index) {
-              final urnDoc = fullUrns[index];
-              final data = urnDoc.data() as Map<String, dynamic>;
-              final timestamp = data['lastFullTimestamp'] as Timestamp?;
-              
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        data['urnCode'] ?? 'Código da Urna',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      Text.rich(
-                        TextSpan(
-                          text: 'Local: ',
-                          style: const TextStyle(color: Colors.white70),
-                          children: [
-                            TextSpan(
-                              text: data['assignedToName'] ?? 'Não informado',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        'Sinalizada em: ${timestamp != null ? DateFormat('dd/MM/yyyy HH:mm').format(timestamp.toDate()) : 'N/A'}',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.check),
-                          label: const Text("Marcar como Coletada"),
-                          onPressed: () => _markAsCollected(urnDoc.id),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
+          // --- ALTERAÇÃO: Substituímos a ListView pelo GoogleMap ---
+          return GoogleMap(
+            initialCameraPosition: const CameraPosition(
+              // Posição inicial do mapa (ex: centro de São Paulo)
+              // O ideal é centralizar com base na localização do coletor ou na primeira urna
+              target: LatLng(-23.550520, -46.633308), 
+              zoom: 12,
+            ),
+            markers: markers,
+            mapType: MapType.normal,
+            myLocationButtonEnabled: true, // Habilita o botão para ir para a localização do usuário
+            myLocationEnabled: true, // Mostra a localização do usuário no mapa (requer permissões de localização)
           );
         },
       ),

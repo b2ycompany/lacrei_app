@@ -13,8 +13,83 @@ import 'school_management_screen.dart';
 import 'sales_management_screen.dart';
 import 'sponsorship_plans_screen.dart';
 
-class AdminDashboardScreen extends StatelessWidget {
+// --- NOVO: Classe modelo para organizar os dados do relatório ---
+class SchoolParticipationReport {
+  final String schoolName;
+  final int participantCount;
+
+  SchoolParticipationReport({required this.schoolName, required this.participantCount});
+}
+
+// --- ALTERAÇÃO: Convertido para StatefulWidget para carregar os dados do relatório ---
+class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
+
+  @override
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  // --- NOVO: Variáveis de estado para o relatório ---
+  List<SchoolParticipationReport> _reports = [];
+  bool _isLoadingReports = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchParticipationReports();
+  }
+
+  // --- NOVO: Função para buscar e processar os dados do relatório ---
+  Future<void> _fetchParticipationReports() async {
+    try {
+      // 1. Busca todas as escolas/faculdades
+      final schoolsSnapshot = await FirebaseFirestore.instance.collection('schools').get();
+      final List<SchoolParticipationReport> tempReports = [];
+
+      // 2. Para cada escola, faz a contagem de usuários
+      for (var schoolDoc in schoolsSnapshot.docs) {
+        final schoolId = schoolDoc.id;
+        final schoolName = schoolDoc.data()['schoolName'] ?? 'Nome não encontrado';
+
+        // Usando a agregação .count() para eficiência
+        final countQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .where('schoolId', isEqualTo: schoolId)
+            .count()
+            .get();
+        
+        // --- CORREÇÃO: Adicionado '?? 0' para garantir que o valor nunca seja nulo ---
+        final participantCount = countQuery.count ?? 0;
+
+        tempReports.add(SchoolParticipationReport(
+          schoolName: schoolName,
+          participantCount: participantCount,
+        ));
+      }
+      
+      // Ordena o relatório por nome da escola
+      tempReports.sort((a, b) => a.schoolName.compareTo(b.schoolName));
+
+      // 3. Atualiza o estado com os dados prontos
+      if (mounted) {
+        setState(() {
+          _reports = tempReports;
+          _isLoadingReports = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingReports = false;
+        });
+        // Opcional: mostrar um SnackBar ou mensagem de erro
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro ao carregar relatório: ${e.toString()}'))
+        );
+      }
+    }
+  }
 
   Future<void> _logout(BuildContext context) async {
     try {
@@ -58,8 +133,7 @@ class AdminDashboardScreen extends StatelessWidget {
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
-
-            // NOVO: DASHBOARD DE ESTATÍSTICAS
+            
             const Text("Estatísticas da Plataforma", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             Row(
@@ -71,6 +145,11 @@ class AdminDashboardScreen extends StatelessWidget {
                 _buildMetricCard('users', 'Usuários', Colors.purpleAccent),
               ],
             ),
+            const SizedBox(height: 24),
+
+            // --- NOVO: Seção do Relatório de Participação ---
+            _buildParticipationReportSection(),
+
             const Divider(height: 48, thickness: 1),
 
             const Text("Ferramentas de Gestão", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -125,7 +204,37 @@ class AdminDashboardScreen extends StatelessWidget {
     );
   }
 
-  // NOVO: Widget para os cards de métricas
+  // --- NOVO: Widget que constrói a tabela do relatório ---
+  Widget _buildParticipationReportSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Relatório de Participação", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        _isLoadingReports
+            ? const Center(child: CircularProgressIndicator())
+            : Card(
+                elevation: 4,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Escola/Faculdade', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Participantes', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+                    ],
+                    rows: _reports.map((report) => DataRow(
+                      cells: [
+                        DataCell(Text(report.schoolName)),
+                        DataCell(Text(report.participantCount.toString())),
+                      ],
+                    )).toList(),
+                  ),
+                ),
+              ),
+      ],
+    );
+  }
+
   Widget _buildMetricCard(String collection, String label, Color color) {
     return Expanded(
       child: Card(

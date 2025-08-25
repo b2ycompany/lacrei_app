@@ -38,6 +38,10 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
   List<School> _schoolsList = [];
   School? _selectedSchool;
 
+  // --- NOVO: Variáveis para o Nível de Ensino ---
+  String? _selectedEducationLevel;
+  final List<String> _educationLevels = ['Ensino Fundamental', 'Ensino Médio', 'Ensino Superior'];
+
   final _formKeyStep0 = GlobalKey<FormState>();
   final _formKeyStep1 = GlobalKey<FormState>();
   final _formKeyStep2 = GlobalKey<FormState>();
@@ -125,16 +129,13 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
     }
   }
 
-  // --- CORREÇÃO PRINCIPAL APLICADA AQUI ---
   Future<void> _registerUser() async {
-    // Validações movidas para o onStepContinue para uma melhor experiência do usuário,
-    // mas a função _registerUser agora é chamada apenas quando tudo está válido.
     setState(() => _isLoading = true);
-    User? user; // Variável para guardar o utilizador da Auth
+    User? user; 
 
     try {
       final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: _emailController.text.trim(), password: _passwordController.text.trim());
-      user = userCredential.user; // Guarda a referência do utilizador criado
+      user = userCredential.user;
       if (user == null) throw Exception("Erro ao criar usuário na autenticação.");
 
       String? studentImageUrl;
@@ -150,13 +151,14 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
       
       final luckyNumber = '${DateTime.now().millisecondsSinceEpoch}${Random().nextInt(100)}';
 
-      // Se esta escrita no Firestore falhar, o 'catch' abaixo será acionado
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': studentName, 'email': _emailController.text.trim(), 'userImageUrl': studentImageUrl,
         'role': 'aluno', 'schoolId': _selectedSchool!.id, 'schoolName': _selectedSchool!.name,
         'schoolLinkStatus': 'pending', 'phone': _phoneController.text.trim(), 'birthDate': _birthDateController.text.trim(),
         'cep': _cepController.text.trim(), 'address': _addressController.text.trim(), 'createdAt': Timestamp.now(),
         'age': _calculatedAge, 'userType': _userType,
+        // --- NOVO: Salvando o nível de ensino no banco de dados ---
+        'educationLevel': _selectedEducationLevel,
         'grade': _userType == 'aluno' ? _gradeController.text.trim() : null,
         'position': _userType == 'funcionario' ? _positionController.text.trim() : null,
         'guardianName': _showGuardianTerms ? _guardianController.text.trim() : null,
@@ -173,13 +175,10 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
         Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
       }
     } catch (e) {
-      // LÓGICA DE REVERSÃO (ROLLBACK)
-      // Se 'user' não for nulo, significa que a criação na Auth funcionou, mas algo depois falhou.
-      // Então, apagamos o utilizador da Auth para que o e-mail possa ser usado novamente.
       if (user != null) {
         await user.delete();
       }
-      _showSnackBar("Ocorreu um erro durante o cadastro. Por favor, tente novamente. Detalhe: ${e.toString()}", isError: true);
+      _showSnackBar("Ocorreu um erro durante o cadastro. Detalhe: ${e.toString()}", isError: true);
     } finally {
       if(mounted) setState(() => _isLoading = false);
     }
@@ -266,13 +265,13 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
               } else if (_currentStep == 1) {
                  isStepValid = _formKeyStep1.currentState?.validate() ?? false;
                  if (isStepValid && _showGuardianTerms && !_guardianTermsAccepted) {
-                    _showSnackBar("O responsável precisa de aceitar os Termos para menores.");
+                    _showSnackBar("O responsável precisa aceitar os Termos para menores.");
                     isStepValid = false;
                  }
               } else if (_currentStep == 2) {
                 isStepValid = _formKeyStep2.currentState?.validate() ?? false;
                 if (isStepValid && !_termsAccepted) {
-                  _showSnackBar("Você precisa de aceitar os Termos de Serviço.");
+                  _showSnackBar("Você precisa aceitar os Termos de Serviço.");
                   isStepValid = false;
                 }
               }
@@ -320,7 +319,7 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
                     const SizedBox(height: 16),
                     TextFormField(controller: _passwordController, decoration: _buildInputDecoration('Senha (mínimo 6 caracteres)'), obscureText: true, validator: (v) => (v?.length ?? 0) < 6 ? 'A senha é muito curta.' : null),
                     const SizedBox(height: 16),
-                    TextFormField(controller: _confirmPasswordController, decoration: _buildInputDecoration('Confirmar Senha'), obscureText: true, validator: (v) => v != _passwordController.text ? 'As senhas não coincidem.' : null),
+                    TextFormField(controller: _confirmPasswordController, decoration: _buildInputDecoration('Confirmar Senha'), obscureText: true, autovalidateMode: AutovalidateMode.onUserInteraction, validator: (v) => v != _passwordController.text ? 'As senhas não coincidem.' : null),
                   ]).animate().fade(duration: 400.ms).slideY(begin: 0.2),
                 )
               ),
@@ -341,14 +340,28 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
                       children: const [ Text('Sou Aluno'), Text('Sou Funcionário') ],
                     ),
                     const SizedBox(height: 16),
+                    
+                    // --- NOVO: Campo de Nível de Ensino ---
+                    DropdownButtonFormField<String>(
+                      decoration: _buildInputDecoration('Nível de Ensino'),
+                      value: _selectedEducationLevel,
+                      items: _educationLevels.map((level) => DropdownMenuItem(value: level, child: Text(level))).toList(),
+                      onChanged: (value) => setState(() => _selectedEducationLevel = value),
+                      validator: (value) => value == null ? 'Obrigatório' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    TextFormField(controller: _nameController, decoration: _buildInputDecoration('Nome Completo'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                    const SizedBox(height: 16),
+
                     if (_userType == 'funcionario')
                         TextFormField(controller: _positionController, decoration: _buildInputDecoration('Qual o seu Cargo?'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null).animate().fade(),
                     if (_userType == 'aluno')
                         TextFormField(controller: _gradeController, decoration: _buildInputDecoration('Série / Ano'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null).animate().fade(),
                     const SizedBox(height: 16),
-                    TextFormField(controller: _nameController, decoration: _buildInputDecoration('Nome Completo'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<School>(decoration: _buildInputDecoration('Selecione sua Escola'), value: _selectedSchool, items: _schoolsList.map((s) => DropdownMenuItem(value: s, child: Text(s.name, overflow: TextOverflow.ellipsis))).toList(), onChanged: (s) => setState(() => _selectedSchool = s), validator: (value) => value == null ? 'Obrigatório' : null, isExpanded: true),
+                    
+                    // --- ALTERADO: Label do campo ---
+                    DropdownButtonFormField<School>(decoration: _buildInputDecoration('Selecione sua Escola/Faculdade'), value: _selectedSchool, items: _schoolsList.map((s) => DropdownMenuItem(value: s, child: Text(s.name, overflow: TextOverflow.ellipsis))).toList(), onChanged: (s) => setState(() => _selectedSchool = s), validator: (value) => value == null ? 'Obrigatório' : null, isExpanded: true),
                     const SizedBox(height: 16),
                     TextFormField(controller: _birthDateController, decoration: _buildInputDecoration('Data de Nascimento', suffixIcon: const Icon(Icons.calendar_today)), inputFormatters: [_birthDateMaskFormatter], onTap: () => _selectDate(context), readOnly: true, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
                     if (_showGuardianTerms)
