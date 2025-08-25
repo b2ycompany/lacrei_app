@@ -1,7 +1,7 @@
 // lib/screens/admin/admin_dashboard_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../profile_selection_screen.dart';
 import 'partner_management_screen.dart';
@@ -48,7 +48,7 @@ class AdminDashboardScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,14 +58,31 @@ class AdminDashboardScreen extends StatelessWidget {
               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
-            Expanded(
-              child: GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 1.2,
-                children: [
-                  // FUNCIONALIDADES EXISTENTES (MANTIDAS)
+
+            // NOVO: DASHBOARD DE ESTATÍSTICAS
+            const Text("Estatísticas da Plataforma", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _buildMetricCard('schools', 'Escolas', Colors.orangeAccent),
+                const SizedBox(width: 16),
+                _buildMetricCard('companies', 'Empresas', Colors.lightBlueAccent),
+                const SizedBox(width: 16),
+                _buildMetricCard('users', 'Usuários', Colors.purpleAccent),
+              ],
+            ),
+            const Divider(height: 48, thickness: 1),
+
+            const Text("Ferramentas de Gestão", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 1.2,
+              children: [
                   _buildDashboardCard(
                     context: context, icon: Icons.flag, label: "Gerenciar Campanhas", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CampaignManagementScreen())),
@@ -90,8 +107,6 @@ class AdminDashboardScreen extends StatelessWidget {
                     context: context, icon: Icons.upload, label: "Carga de Escolas", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BulkUploadScreen())),
                   ),
-                  
-                  // NOVAS FUNCIONALIDADES ADICIONADAS
                   _buildDashboardCard(
                     context: context, icon: Icons.group_add, label: "Equipe de Vendas", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesManagementScreen())),
@@ -102,10 +117,41 @@ class AdminDashboardScreen extends StatelessWidget {
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SponsorshipPlansScreen())),
                     isHighlighted: true,
                   ),
-                ],
-              ),
+              ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  // NOVO: Widget para os cards de métricas
+  Widget _buildMetricCard(String collection, String label, Color color) {
+    return Expanded(
+      child: Card(
+        elevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection(collection).snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Text("...", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold));
+                  }
+                  if (!snapshot.hasData) return const Text("0", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold));
+                  
+                  return Text(
+                    snapshot.data!.docs.length.toString(),
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: color),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              Text(label, style: const TextStyle(fontSize: 14, color: Colors.white70)),
+            ],
+          ),
         ),
       ),
     );

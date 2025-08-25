@@ -1,5 +1,4 @@
 // lib/screens/school_admin/school_admin_dashboard_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -69,9 +68,9 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    // ALTERADO: Comprimento do TabController para 4
+    // ALTERADO: Comprimento do TabController para 5 para incluir o novo painel
     return DefaultTabController(
-      length: 4, 
+      length: 5, 
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Dashboard da Escola"),
@@ -82,10 +81,11 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
               onPressed: _logout,
             ),
           ],
-          // ALTERADO: Adicionada a nova aba "Urnas"
+          // ALTERADO: Adicionada a nova aba "Painel"
           bottom: const TabBar(
-            isScrollable: true, // Permite rolar as abas se não couberem
+            isScrollable: true,
             tabs: [
+              Tab(icon: Icon(Icons.dashboard), text: "Painel"),
               Tab(icon: Icon(Icons.campaign), text: "Campanhas"),
               Tab(icon: Icon(Icons.add_task), text: "Registrar Coleta"),
               Tab(icon: Icon(Icons.inventory_2_outlined), text: "Urnas"),
@@ -99,9 +99,10 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
                 ? const Center(child: Text("Administrador não vinculado a uma escola."))
                 : TabBarView(
                     children: [
+                      // NOVO: Adicionado o widget do painel de estatísticas
+                      SchoolDashboardView(schoolId: _schoolId!),
                       CampaignApprovalView(schoolId: _schoolId!),
                       RegisterCollectionView(schoolId: _schoolId!),
-                      // NOVO: Adicionado o widget da aba de Urnas
                       UrnStatusView(assignedToId: _schoolId!),
                       PendingRequestsView(schoolId: _schoolId!),
                     ],
@@ -111,7 +112,81 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
   }
 }
 
-// NOVO: Widget genérico para exibir e gerir o status da urna. Pode ser reutilizado.
+// NOVO WIDGET PARA O PAINEL PRINCIPAL DO ADMIN DA ESCOLA
+class SchoolDashboardView extends StatelessWidget {
+  final String schoolId;
+  const SchoolDashboardView({super.key, required this.schoolId});
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Card para mostrar o total arrecadado
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('schools').doc(schoolId).snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data?.data() == null) {
+                return const Card(child: Padding(padding: EdgeInsets.all(20.0), child: Text("N/A kg")));
+              }
+              final schoolData = snapshot.data!.data() as Map<String, dynamic>;
+              final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
+              return Card(
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    children: [
+                      const Text("Total Geral Arrecadado", style: TextStyle(fontSize: 18, color: Colors.white70)),
+                      const SizedBox(height: 12),
+                      Text("${totalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          // Card para mostrar o número de alunos e funcionários
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .where('schoolId', isEqualTo: schoolId)
+                .where('schoolLinkStatus', isEqualTo: 'approved')
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final count = snapshot.data?.docs.length ?? 0;
+              return Card(
+                elevation: 4,
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    children: [
+                      const Text("Alunos e Funcionários Ativos", style: TextStyle(fontSize: 18, color: Colors.white70)),
+                      const SizedBox(height: 12),
+                      Text(count.toString(), style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.purpleAccent)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// Widget para exibir e gerir o status da urna
 class UrnStatusView extends StatelessWidget {
   final String assignedToId;
   const UrnStatusView({super.key, required this.assignedToId});
@@ -135,11 +210,10 @@ class UrnStatusView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      // Busca a urna que está atribuída a esta escola/empresa
       stream: FirebaseFirestore.instance
           .collection('urns')
           .where('assignedToId', isEqualTo: assignedToId)
-          .limit(1) // Assumindo uma urna por local por enquanto
+          .limit(1)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -188,7 +262,6 @@ class UrnStatusView extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           backgroundColor: isFull ? Colors.grey : Colors.red,
                         ),
-                        // Desabilita o botão se a urna já estiver cheia
                         onPressed: isFull ? null : () => _signalUrnFull(context, urnDoc.id),
                       ),
                     ],
@@ -203,7 +276,6 @@ class UrnStatusView extends StatelessWidget {
   }
 }
 
-// ... (Restante do código: CampaignApprovalView, RegisterCollectionView, PendingRequestsView - sem alterações)
 class CampaignApprovalView extends StatelessWidget {
   final String schoolId;
   const CampaignApprovalView({super.key, required this.schoolId});
@@ -296,59 +368,47 @@ class _RegisterCollectionViewState extends State<RegisterCollectionView> {
   }
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).get(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final schoolData = snapshot.data!.data() as Map<String, dynamic>;
-        final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
-        return Stack(
-          children: [
-            SingleChildScrollView(
-              padding: const EdgeInsets.all(24.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(schoolData['schoolName'] ?? 'Sua Escola', textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 24),
-                    Card(child: Padding(padding: const EdgeInsets.all(20.0), child: Column(children: [ const Text("Total Geral Arrecadado", style: TextStyle(fontSize: 18, color: Colors.white70)), const SizedBox(height: 12), Text("${totalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.greenAccent))]))),
-                    const SizedBox(height: 40),
-                    Text("Registrar Nova Coleta", style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white)),
-                    const SizedBox(height: 16),
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).collection('activeCampaigns').where('status', isEqualTo: 'active').snapshots(),
-                      builder: (context, campaignSnapshot) {
-                        if (!campaignSnapshot.hasData) { return const Text("A carregar campanhas..."); }
-                        final activeCampaigns = campaignSnapshot.data!.docs;
-                        return DropdownButtonFormField<DocumentSnapshot>(
-                          value: _selectedCampaign, hint: const Text("Selecione a Campanha"),
-                          items: activeCampaigns.map((doc) { return DropdownMenuItem<DocumentSnapshot>(value: doc, child: Text(doc['campaignName'] ?? 'Campanha sem nome')); }).toList(),
-                          onChanged: (value) { setState(() { _selectedCampaign = value; }); },
-                          validator: (value) => value == null ? 'Selecione uma campanha' : null,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _weightController, decoration: const InputDecoration(labelText: 'Peso Arrecadado (kg)', hintText: 'Ex: 15,5'), keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) return 'Insira o peso.';
-                        if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Insira um número válido.';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(onPressed: _isRegistering ? null : _registerCollection, icon: const Icon(Icons.add_task), label: const Text("Registrar Coleta"), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16))),
-                  ],
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text("Registrar Nova Coleta", style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white)),
+                const SizedBox(height: 16),
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).collection('activeCampaigns').where('status', isEqualTo: 'active').snapshots(),
+                  builder: (context, campaignSnapshot) {
+                    if (!campaignSnapshot.hasData) { return const Text("A carregar campanhas..."); }
+                    final activeCampaigns = campaignSnapshot.data!.docs;
+                    return DropdownButtonFormField<DocumentSnapshot>(
+                      value: _selectedCampaign, hint: const Text("Selecione a Campanha"),
+                      items: activeCampaigns.map((doc) { return DropdownMenuItem<DocumentSnapshot>(value: doc, child: Text(doc['campaignName'] ?? 'Campanha sem nome')); }).toList(),
+                      onChanged: (value) { setState(() { _selectedCampaign = value; }); },
+                      validator: (value) => value == null ? 'Selecione uma campanha' : null,
+                    );
+                  },
                 ),
-              ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _weightController, decoration: const InputDecoration(labelText: 'Peso Arrecadado (kg)', hintText: 'Ex: 15,5'), keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Insira o peso.';
+                    if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Insira um número válido.';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(onPressed: _isRegistering ? null : _registerCollection, icon: const Icon(Icons.add_task), label: const Text("Registrar Coleta"), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16))),
+              ],
             ),
-            if (_isRegistering) Container(color: Colors.black.withOpacity(0.5), child: const Center(child: CircularProgressIndicator())),
-          ],
-        );
-      },
+          ),
+        ),
+        if (_isRegistering) Container(color: Colors.black.withOpacity(0.5), child: const Center(child: CircularProgressIndicator())),
+      ],
     );
   }
 }

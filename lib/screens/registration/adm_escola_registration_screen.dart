@@ -1,6 +1,6 @@
 // lib/screens/registration/adm_escola_registration_screen.dart
 
-// CORREÇÃO: Adicionada a importação que faltava para Uint8List
+// --- CORREÇÃO: Ajustado de 'dart.typed_data' para 'dart:typed_data' ---
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -25,6 +25,10 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
   int _currentStep = 0;
   bool _isLoading = false;
   Uint8List? _schoolImageBytes;
+
+  final _formKeyStep0 = GlobalKey<FormState>();
+  final _formKeyStep1 = GlobalKey<FormState>();
+  final _formKeyStep2 = GlobalKey<FormState>();
 
   final _schoolNameController = TextEditingController();
   final _schoolPhoneController = TextEditingController();
@@ -55,8 +59,7 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
 
   Future<void> _pickImage() async {
     final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
-    if (pickedFile == null) return;
-    if (!mounted) return;
+    if (pickedFile == null || !mounted) return;
 
     final croppedFile = await ImageCropper().cropImage(
       sourcePath: pickedFile.path,
@@ -70,73 +73,69 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
     );
     if (croppedFile != null) {
       final bytes = await croppedFile.readAsBytes();
-      setState(() {
-        _schoolImageBytes = bytes;
-      });
+      setState(() => _schoolImageBytes = bytes);
     }
   }
 
   Future<void> _registerAdmEscola() async {
-    if (_currentStep != 2) return;
-    if (_schoolNameController.text.isEmpty || _schoolCepController.text.isEmpty || _responsibleNameController.text.isEmpty || _emailController.text.isEmpty) {
-      _showSnackBar("Por favor, preencha todos os campos obrigatórios antes de finalizar.");
-      return;
-    }
-    if (_passwordController.text != _confirmPasswordController.text) {
-      _showSnackBar("As senhas não coincidem.");
-      return;
-    }
-
     setState(() => _isLoading = true);
+    User? user; 
+
     try {
       final UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      final User? user = userCredential.user;
+      user = userCredential.user;
+      if (user == null) throw Exception("Falha ao criar usuário na autenticação.");
 
-      if (user != null) {
-        final schoolDocRef = FirebaseFirestore.instance.collection('schools').doc();
-        String? schoolImageUrl;
+      final schoolDocRef = FirebaseFirestore.instance.collection('schools').doc();
+      String? schoolImageUrl;
 
-        if (_schoolImageBytes != null) {
-          final storageRef = FirebaseStorage.instance.ref('school_avatars/${schoolDocRef.id}');
-          await storageRef.putData(_schoolImageBytes!);
-          schoolImageUrl = await storageRef.getDownloadURL();
-        }
+      if (_schoolImageBytes != null) {
+        final storageRef = FirebaseStorage.instance.ref('school_avatars/${schoolDocRef.id}');
+        await storageRef.putData(_schoolImageBytes!);
+        schoolImageUrl = await storageRef.getDownloadURL();
+      }
 
-        await schoolDocRef.set({
-          'schoolName': _schoolNameController.text.trim(),
-          'schoolType': 'particular', 
-          'city': _schoolAddressCityController.text.trim(),
-          'cep': _schoolCepController.text.trim(),
-          'address': '${_schoolAddressController.text.trim()}, ${_schoolAddressNumberController.text.trim()}',
-          'schoolPhone': _schoolPhoneController.text.trim(),
-          'schoolDistrict': _schoolAddressDistrictController.text.trim(),
-          'schoolState': _schoolAddressStateController.text.trim(),
-          'schoolImageUrl': schoolImageUrl,
-          'totalCollectedKg': 0,
-          'adminUid': user.uid,
-          'createdAt': Timestamp.now(),
-        });
+      final batch = FirebaseFirestore.instance.batch();
 
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'name': _responsibleNameController.text.trim(),
-          'phone': _responsiblePhoneController.text.trim(),
-          'email': _emailController.text.trim(),
-          'role': 'adm_escola',
-          'schoolId': schoolDocRef.id,
-        });
+      batch.set(schoolDocRef, {
+        'schoolName': _schoolNameController.text.trim(),
+        'schoolType': 'particular', 
+        'city': _schoolAddressCityController.text.trim(),
+        'cep': _schoolCepController.text.trim(),
+        'address': '${_schoolAddressController.text.trim()}, ${_schoolAddressNumberController.text.trim()}',
+        'schoolPhone': _schoolPhoneController.text.trim(),
+        'schoolDistrict': _schoolAddressDistrictController.text.trim(),
+        'schoolState': _schoolAddressStateController.text.trim(),
+        'schoolImageUrl': schoolImageUrl,
+        'totalCollectedKg': 0,
+        'adminUid': user.uid, 
+        'createdAt': Timestamp.now(),
+      });
 
-        if (mounted) {
-          _showSnackBar("Cadastro da escola e do administrador realizado com sucesso!", isError: false);
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (route) => false,
-          );
-        }
+      batch.set(FirebaseFirestore.instance.collection('users').doc(user.uid), {
+        'name': _responsibleNameController.text.trim(),
+        'phone': _responsiblePhoneController.text.trim(),
+        'email': _emailController.text.trim(),
+        'role': 'adm_escola', 
+        'schoolId': schoolDocRef.id,
+      });
+      
+      await batch.commit();
+
+      if (mounted) {
+        _showSnackBar("Cadastro da escola e do administrador realizado com sucesso!", isError: false);
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
       }
     } catch (e) {
+      if (user != null) {
+        await user.delete();
+      }
       _showSnackBar("Ocorreu um erro: ${e.toString()}");
     } finally {
       if(mounted) setState(() => _isLoading = false);
@@ -198,6 +197,26 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
     );
   }
 
+  void _onStepContinue() {
+    bool isStepValid = false;
+    if (_currentStep == 0) {
+      isStepValid = _formKeyStep0.currentState?.validate() ?? false;
+    } else if (_currentStep == 1) {
+      isStepValid = _formKeyStep1.currentState?.validate() ?? false;
+    } else if (_currentStep == 2) {
+      isStepValid = _formKeyStep2.currentState?.validate() ?? false;
+    }
+
+    if (isStepValid) {
+      if (_currentStep < 2) {
+        setState(() => _currentStep += 1);
+      } else {
+        _registerAdmEscola();
+      }
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -207,79 +226,79 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
           Stepper(
             type: StepperType.horizontal,
             currentStep: _currentStep,
-            onStepContinue: () {
-              if (_currentStep < 2) {
-                setState(() => _currentStep += 1);
-              } else {
-                 _registerAdmEscola();
-              }
-            },
+            onStepContinue: _onStepContinue,
             onStepCancel: () => _currentStep == 0 ? Navigator.of(context).pop() : setState(() => _currentStep -= 1),
             steps: [
               Step(
                 title: const Text('Admin'),
                 isActive: _currentStep >= 0,
-                content: Column(children: [
-                  TextFormField(controller: _responsibleNameController, decoration: _buildInputDecoration('Nome do Responsável')),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _responsiblePhoneController, decoration: _buildInputDecoration('Telefone do Responsável'), inputFormatters: [_phoneMaskFormatter], keyboardType: TextInputType.phone),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _emailController, decoration: _buildInputDecoration('E-mail de Acesso'), keyboardType: TextInputType.emailAddress),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _passwordController, decoration: _buildInputDecoration('Senha de Acesso'), obscureText: true),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _confirmPasswordController, decoration: _buildInputDecoration('Confirmar Senha'), obscureText: true),
-                ]).animate().fade(duration: 400.ms).slideY(begin: 0.2),
+                content: Form(
+                  key: _formKeyStep0,
+                  child: Column(children: [
+                    TextFormField(controller: _responsibleNameController, decoration: _buildInputDecoration('Nome do Responsável'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _responsiblePhoneController, decoration: _buildInputDecoration('Telefone do Responsável'), inputFormatters: [_phoneMaskFormatter], keyboardType: TextInputType.phone),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _emailController, decoration: _buildInputDecoration('E-mail de Acesso'), keyboardType: TextInputType.emailAddress, validator: (v) => (v!.isEmpty || !v.contains('@')) ? 'E-mail inválido' : null),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _passwordController, decoration: _buildInputDecoration('Senha de Acesso'), obscureText: true, validator: (v) => (v?.length ?? 0) < 6 ? 'A senha deve ter no mínimo 6 caracteres' : null),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _confirmPasswordController, decoration: _buildInputDecoration('Confirmar Senha'), obscureText: true, autovalidateMode: AutovalidateMode.onUserInteraction, validator: (v) => v != _passwordController.text ? 'As senhas não coincidem' : null),
+                  ]).animate().fade(duration: 400.ms).slideY(begin: 0.2),
+                ),
               ),
               Step(
                 title: const Text('Escola'),
                 isActive: _currentStep >= 1,
-                content: Column(children: [
-                   GestureDetector(
-                     onTap: _pickImage,
-                     child: Stack(
-                       alignment: Alignment.bottomRight,
-                       children: [
-                         CircleAvatar(
-                           radius: 60,
-                           backgroundColor: Colors.white.withAlpha(25),
-                           backgroundImage: _schoolImageBytes != null ? MemoryImage(_schoolImageBytes!) : null,
-                           child: _schoolImageBytes == null ? const Icon(Icons.school_outlined, size: 60, color: Colors.white70) : null,
-                         ),
-                         Container(
-                           decoration: const BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle),
-                           child: const Padding(
-                             padding: EdgeInsets.all(4.0),
-                             child: Icon(Icons.add_a_photo, color: Colors.white, size: 20),
+                content: Form(
+                  key: _formKeyStep1,
+                  child: Column(children: [
+                     GestureDetector(
+                       onTap: _pickImage,
+                       child: Stack(
+                         alignment: Alignment.bottomRight,
+                         children: [
+                           CircleAvatar(
+                             radius: 60,
+                             backgroundColor: Colors.white.withAlpha(25),
+                             backgroundImage: _schoolImageBytes != null ? MemoryImage(_schoolImageBytes!) : null,
+                             child: _schoolImageBytes == null ? const Icon(Icons.school_outlined, size: 60, color: Colors.white70) : null,
                            ),
-                         )
-                       ],
+                           Container(
+                             decoration: const BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle),
+                             child: const Padding( padding: EdgeInsets.all(4.0), child: Icon(Icons.add_a_photo, color: Colors.white, size: 20) ),
+                           )
+                         ],
+                       ),
                      ),
-                   ),
-                   const SizedBox(height: 8),
-                   const Text("Avatar da Escola (Opcional)", style: TextStyle(color: Colors.white70)),
-                   const SizedBox(height: 24),
-                   TextFormField(controller: _schoolNameController, decoration: _buildInputDecoration('Nome da Escola')),
-                   const SizedBox(height: 16),
-                   TextFormField(controller: _schoolPhoneController, decoration: _buildInputDecoration('Telefone da Escola'), inputFormatters: [_phoneMaskFormatter], keyboardType: TextInputType.phone),
-                ]).animate().fade(duration: 400.ms).slideY(begin: 0.2),
+                     const SizedBox(height: 8),
+                     const Text("Avatar da Escola (Opcional)", style: TextStyle(color: Colors.white70)),
+                     const SizedBox(height: 24),
+                     TextFormField(controller: _schoolNameController, decoration: _buildInputDecoration('Nome da Escola'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
+                     const SizedBox(height: 16),
+                     TextFormField(controller: _schoolPhoneController, decoration: _buildInputDecoration('Telefone da Escola'), inputFormatters: [_phoneMaskFormatter], keyboardType: TextInputType.phone),
+                  ]).animate().fade(duration: 400.ms).slideY(begin: 0.2),
+                ),
               ),
               Step(
                 title: const Text('Endereço'),
                 isActive: _currentStep >= 2,
-                content: Column(children: [
-                  TextFormField(controller: _schoolCepController, focusNode: _cepFocusNode, decoration: _buildInputDecoration('CEP da Escola'), inputFormatters: [_cepMaskFormatter], keyboardType: TextInputType.number),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _schoolAddressController, decoration: _buildInputDecoration('Rua / Logradouro')),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _schoolAddressNumberController, decoration: _buildInputDecoration('Número'), keyboardType: TextInputType.number),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _schoolAddressDistrictController, decoration: _buildInputDecoration('Bairro')),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _schoolAddressCityController, decoration: _buildInputDecoration('Cidade')),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _schoolAddressStateController, decoration: _buildInputDecoration('Estado')),
-                ]).animate().fade(duration: 400.ms).slideY(begin: 0.2),
+                content: Form(
+                  key: _formKeyStep2,
+                  child: Column(children: [
+                    TextFormField(controller: _schoolCepController, focusNode: _cepFocusNode, decoration: _buildInputDecoration('CEP da Escola'), inputFormatters: [_cepMaskFormatter], keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _schoolAddressController, decoration: _buildInputDecoration('Rua / Logradouro')),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _schoolAddressNumberController, decoration: _buildInputDecoration('Número'), keyboardType: TextInputType.number),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _schoolAddressDistrictController, decoration: _buildInputDecoration('Bairro')),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _schoolAddressCityController, decoration: _buildInputDecoration('Cidade')),
+                    const SizedBox(height: 16),
+                    TextFormField(controller: _schoolAddressStateController, decoration: _buildInputDecoration('Estado')),
+                  ]).animate().fade(duration: 400.ms).slideY(begin: 0.2),
+                ),
               ),
             ],
           ),

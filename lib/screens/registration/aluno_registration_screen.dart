@@ -125,12 +125,17 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
     }
   }
 
+  // --- CORREÇÃO PRINCIPAL APLICADA AQUI ---
   Future<void> _registerUser() async {
+    // Validações movidas para o onStepContinue para uma melhor experiência do usuário,
+    // mas a função _registerUser agora é chamada apenas quando tudo está válido.
     setState(() => _isLoading = true);
+    User? user; // Variável para guardar o utilizador da Auth
+
     try {
       final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(email: _emailController.text.trim(), password: _passwordController.text.trim());
-      final user = userCredential.user;
-      if (user == null) throw Exception("Erro ao criar usuário.");
+      user = userCredential.user; // Guarda a referência do utilizador criado
+      if (user == null) throw Exception("Erro ao criar usuário na autenticação.");
 
       String? studentImageUrl;
       if (_studentImageBytes != null) {
@@ -145,6 +150,7 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
       
       final luckyNumber = '${DateTime.now().millisecondsSinceEpoch}${Random().nextInt(100)}';
 
+      // Se esta escrita no Firestore falhar, o 'catch' abaixo será acionado
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': studentName, 'email': _emailController.text.trim(), 'userImageUrl': studentImageUrl,
         'role': 'aluno', 'schoolId': _selectedSchool!.id, 'schoolName': _selectedSchool!.name,
@@ -166,8 +172,14 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
         _showSnackBar("Cadastro realizado! Aguardando aprovação da escola.", isError: false);
         Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (context) => const LoginScreen()), (route) => false);
       }
-    } on FirebaseAuthException catch (e) {
-      _showSnackBar(e.message ?? "Ocorreu um erro.");
+    } catch (e) {
+      // LÓGICA DE REVERSÃO (ROLLBACK)
+      // Se 'user' não for nulo, significa que a criação na Auth funcionou, mas algo depois falhou.
+      // Então, apagamos o utilizador da Auth para que o e-mail possa ser usado novamente.
+      if (user != null) {
+        await user.delete();
+      }
+      _showSnackBar("Ocorreu um erro durante o cadastro. Por favor, tente novamente. Detalhe: ${e.toString()}", isError: true);
     } finally {
       if(mounted) setState(() => _isLoading = false);
     }
@@ -339,6 +351,15 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
                     DropdownButtonFormField<School>(decoration: _buildInputDecoration('Selecione sua Escola'), value: _selectedSchool, items: _schoolsList.map((s) => DropdownMenuItem(value: s, child: Text(s.name, overflow: TextOverflow.ellipsis))).toList(), onChanged: (s) => setState(() => _selectedSchool = s), validator: (value) => value == null ? 'Obrigatório' : null, isExpanded: true),
                     const SizedBox(height: 16),
                     TextFormField(controller: _birthDateController, decoration: _buildInputDecoration('Data de Nascimento', suffixIcon: const Icon(Icons.calendar_today)), inputFormatters: [_birthDateMaskFormatter], onTap: () => _selectDate(context), readOnly: true, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                    if (_showGuardianTerms)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16.0),
+                          child: TextFormField(
+                             controller: _guardianController,
+                             decoration: _buildInputDecoration('Nome do Responsável'),
+                             validator: (v) => v!.isEmpty ? 'Obrigatório' : null
+                          ),
+                        ).animate().fade(),
                     if (_showGuardianTerms)
                         Padding(
                           padding: const EdgeInsets.only(top: 16.0),

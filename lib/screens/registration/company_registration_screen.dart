@@ -1,5 +1,6 @@
 // lib/screens/registration/company_registration_screen.dart
 
+// --- CORREÇÃO: Ajustado de 'dart.typed_data' para 'dart:typed_data' ---
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -24,9 +25,9 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
   final _cnpjController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   
   bool _isLoading = false;
-  // NOVO: Variáveis para a imagem do logo
   Uint8List? _companyImageBytes;
   bool _termsAccepted = false;
 
@@ -38,10 +39,10 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
     _cnpjController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose(); 
     super.dispose();
   }
 
-  // NOVO: Função para escolher e cortar a imagem do logo
   Future<void> _pickImage() async {
     final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
     if (pickedFile == null || !mounted) return;
@@ -58,7 +59,6 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
     }
   }
 
-  // LÓGICA ATUALIZADA: para incluir o upload do logo e os termos
   Future<void> _registerCompany() async {
     if (!_formKey.currentState!.validate()) return;
     if (!_termsAccepted) {
@@ -67,14 +67,15 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
     }
 
     setState(() => _isLoading = true);
+    User? user; 
 
     try {
       final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      final user = userCredential.user;
-      if (user == null) throw Exception("Erro ao criar o utilizador.");
+      user = userCredential.user;
+      if (user == null) throw Exception("Erro ao criar o utilizador de autenticação.");
 
       final companyName = _companyNameController.text.trim();
       await user.updateDisplayName(companyName);
@@ -87,22 +88,26 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
         await storageRef.putData(_companyImageBytes!);
         companyImageUrl = await storageRef.getDownloadURL();
       }
+      
+      final batch = FirebaseFirestore.instance.batch();
 
-      await companyDocRef.set({
+      batch.set(companyDocRef, {
         'companyName': companyName,
         'cnpj': _cnpjController.text.trim(),
         'adminUid': user.uid,
-        'companyImageUrl': companyImageUrl, // Salva o URL do logo
+        'companyImageUrl': companyImageUrl,
         'totalCollectedKg': 0,
         'createdAt': Timestamp.now(),
       });
 
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+      batch.set(FirebaseFirestore.instance.collection('users').doc(user.uid), {
         'name': companyName,
         'email': _emailController.text.trim(),
         'role': 'company_admin',
         'companyId': companyDocRef.id,
       });
+      
+      await batch.commit();
 
       if (mounted) {
         _showSnackBar("Empresa cadastrada com sucesso!", isError: false);
@@ -111,10 +116,11 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
           (route) => false,
         );
       }
-    } on FirebaseAuthException catch (e) {
-      _showSnackBar(e.message ?? "Erro desconhecido.");
     } catch (e) {
-      _showSnackBar("Ocorreu um erro: ${e.toString()}");
+      if (user != null) {
+        await user.delete();
+      }
+      _showSnackBar("Ocorreu um erro durante o cadastro. Por favor, tente novamente. Detalhe: ${e.toString()}", isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -146,7 +152,6 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // NOVO: Widget para selecionar e pré-visualizar o logo
                     GestureDetector(
                       onTap: _pickImage,
                       child: Container(
@@ -169,8 +174,15 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
                     TextFormField(controller: _emailController, decoration: const InputDecoration(labelText: "E-mail de Contato (será o seu login)"), keyboardType: TextInputType.emailAddress, validator: (v) => v!.isEmpty ? "Campo obrigatório" : null),
                     const SizedBox(height: 16),
                     TextFormField(controller: _passwordController, decoration: const InputDecoration(labelText: "Senha"), obscureText: true, validator: (v) => v!.length < 6 ? "A senha deve ter no mínimo 6 caracteres" : null),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _confirmPasswordController, 
+                      decoration: const InputDecoration(labelText: "Confirmar Senha"), 
+                      obscureText: true, 
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      validator: (v) => v != _passwordController.text ? "As senhas não coincidem" : null
+                    ),
                     const SizedBox(height: 24),
-                    // NOVO: Checkbox de termos de aceite
                     CheckboxListTile(
                       title: const Text("Li e aceito os Termos de Serviço e a Política de Privacidade."),
                       subtitle: GestureDetector(onTap: _showTermsDialog, child: const Text("Clique para ler os termos.", style: TextStyle(color: Colors.purpleAccent, decoration: TextDecoration.underline))),
@@ -189,7 +201,8 @@ class _CompanyRegistrationScreenState extends State<CompanyRegistrationScreen> {
               ),
             ),
           ),
-          if (_isLoading) Container(color: Colors.black.withOpacity(0.5), child: const Center(child: CircularProgressIndicator())),
+          // --- CORREÇÃO: Trocado 'withOpacity(0.5)' por 'withAlpha(128)' ---
+          if (_isLoading) Container(color: Colors.black.withAlpha(128), child: const Center(child: CircularProgressIndicator())),
         ],
       ),
     );
