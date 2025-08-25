@@ -5,7 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'aluno_registration_screen.dart';
 import 'adm_escola_registration_screen.dart';
 import 'instituicao_registration_screen.dart';
-import 'company_registration_screen.dart'; // Import da tela de empresa
+import 'company_registration_screen.dart'; 
 
 class RegistrationSelectionScreen extends StatelessWidget {
   const RegistrationSelectionScreen({super.key});
@@ -30,11 +30,12 @@ class RegistrationSelectionScreen extends StatelessWidget {
             ).animate().fade(duration: 500.ms),
             const SizedBox(height: 40),
             
-            // ALTERADO: Texto do botão atualizado
+            // --- ALTERAÇÃO: Cores atualizadas com base no logo ---
             _buildRegistrationButton(
               context: context,
               label: 'Sou Aluno / Funcionário',
               destination: const AlunoRegistrationScreen(),
+              color: const Color(0xFF99CC33), // Verde Limão
               delay: 300.ms,
             ),
             const SizedBox(height: 20),
@@ -42,6 +43,7 @@ class RegistrationSelectionScreen extends StatelessWidget {
               context: context,
               label: 'Sou Admin de Escola',
               destination: const AdmEscolaRegistrationScreen(),
+              color: const Color(0xFF9966CC), // Roxo
               delay: 500.ms,
             ),
             const SizedBox(height: 20),
@@ -49,18 +51,17 @@ class RegistrationSelectionScreen extends StatelessWidget {
               context: context,
               label: 'Sou uma Instituição',
               destination: const InstituicaoRegistrationScreen(),
+              color: const Color(0xFFCC6699), // Rosa/Magenta
               delay: 700.ms,
             ),
             const SizedBox(height: 20),
-            // NOVO: Botão para cadastro de empresa
             _buildRegistrationButton(
               context: context,
               label: 'Sou uma Empresa',
               destination: const CompanyRegistrationScreen(),
+              color: const Color(0xFFFF6600), // Laranja
               delay: 900.ms,
             ),
-            // O botão para 'Administrador' foi removido desta tela pública por questões de segurança,
-            // como discutimos. Novos super administradores devem ser criados por quem já é admin.
           ],
         ),
       ),
@@ -72,10 +73,15 @@ class RegistrationSelectionScreen extends StatelessWidget {
     required String label,
     required Widget destination,
     required Duration delay,
+    required Color color,
   }) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 5,
       ),
       onPressed: () {
         Navigator.push(
@@ -83,7 +89,7 @@ class RegistrationSelectionScreen extends StatelessWidget {
           MaterialPageRoute(builder: (context) => destination),
         );
       },
-      child: Text(label, style: const TextStyle(fontSize: 18)),
+      child: Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
     ).animate().fade(delay: delay).slideY(begin: 0.5);
   }
 }

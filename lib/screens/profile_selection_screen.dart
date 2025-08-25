@@ -26,15 +26,10 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          AnimatedContainer(
-            duration: const Duration(seconds: 5),
+          Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [
-                  Color(0xFF2C154B),
-                  Color(0xFF4B0082),
-                  Color.fromARGB(255, 48, 20, 78),
-                ],
+                colors: [Color(0xFF2C154B), Color(0xFF4B0082)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -55,16 +50,17 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                         .animate().fade(delay: 400.ms, duration: 800.ms),
                     const SizedBox(height: 60),
 
-                    _ProfileButton(label: 'Aluno / Funcionário', onPressed: () => _navigateToLogin(context))
+                    // --- ALTERAÇÃO: Cores atualizadas com base no logo ---
+                    _ProfileButton(label: 'Aluno / Funcionário', color: const Color(0xFF99CC33), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 600.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
-                    _ProfileButton(label: 'Admin. Escola', onPressed: () => _navigateToLogin(context))
+                    _ProfileButton(label: 'Admin. Escola', color: const Color(0xFF9966CC), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 800.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
-                    _ProfileButton(label: 'Instituição', onPressed: () => _navigateToLogin(context))
+                    _ProfileButton(label: 'Instituição', color: const Color(0xFFCC6699), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 1000.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
-                    _ProfileButton(label: 'Empresa', onPressed: () => _navigateToLogin(context))
+                    _ProfileButton(label: 'Empresa', color: const Color(0xFFFF6600), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 1200.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
                     
                     const SizedBox(height: 40),
@@ -84,7 +80,6 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                         ),
                       ),
                     ),
-                    // O botão para o Portal de Vendedores foi removido daqui.
                   ],
                 ),
               ),
@@ -99,7 +94,13 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
 class _ProfileButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
-  const _ProfileButton({required this.label, required this.onPressed});
+  final Color color;
+
+  const _ProfileButton({
+    required this.label, 
+    required this.onPressed,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -107,19 +108,21 @@ class _ProfileButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onPressed,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: 18),
           decoration: BoxDecoration(
-            color: Colors.white.withAlpha(25),
+            color: color,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withAlpha(51)),
-            gradient: LinearGradient(
-              colors: [Colors.white.withAlpha(38), Colors.white.withAlpha(13)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            border: Border.all(color: Colors.white.withAlpha(80)),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.5),
+                blurRadius: 12,
+                offset: const Offset(0, 4)
+              )
+            ]
           ),
           child: Center(
-            child: Text(label, style: const TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600)),
+            child: Text(label, style: const TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
           ),
         ),
       ),
