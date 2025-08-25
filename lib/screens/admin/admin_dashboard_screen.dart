@@ -1,8 +1,12 @@
 // lib/screens/admin/admin_dashboard_screen.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:csv/csv.dart';
+import 'package:universal_html/html.dart' as html;
+
 import '../profile_selection_screen.dart';
 import 'partner_management_screen.dart';
 import 'campaign_management_screen.dart';
@@ -12,16 +16,24 @@ import 'collection_route_screen.dart';
 import 'school_management_screen.dart';
 import 'sales_management_screen.dart';
 import 'sponsorship_plans_screen.dart';
+// --- NOVO: Import da nova tela de gerenciamento de empresas ---
+import 'company_management_screen.dart';
 
-// --- NOVO: Classe modelo para organizar os dados do relatório ---
+
+// Modelo para o relatório de escolas
 class SchoolParticipationReport {
   final String schoolName;
   final int participantCount;
-
   SchoolParticipationReport({required this.schoolName, required this.participantCount});
 }
 
-// --- ALTERAÇÃO: Convertido para StatefulWidget para carregar os dados do relatório ---
+// Modelo para o relatório de empresas
+class CompanyParticipationReport {
+  final String companyName;
+  final int participantCount;
+  CompanyParticipationReport({required this.companyName, required this.participantCount});
+}
+
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -30,8 +42,8 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  // --- NOVO: Variáveis de estado para o relatório ---
-  List<SchoolParticipationReport> _reports = [];
+  List<SchoolParticipationReport> _schoolReports = [];
+  List<CompanyParticipationReport> _companyReports = [];
   bool _isLoadingReports = true;
 
   @override
@@ -40,55 +52,65 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _fetchParticipationReports();
   }
 
-  // --- NOVO: Função para buscar e processar os dados do relatório ---
   Future<void> _fetchParticipationReports() async {
+    if (!mounted) return;
+    setState(() => _isLoadingReports = true);
     try {
-      // 1. Busca todas as escolas/faculdades
+      // Busca dados das escolas
       final schoolsSnapshot = await FirebaseFirestore.instance.collection('schools').get();
-      final List<SchoolParticipationReport> tempReports = [];
-
-      // 2. Para cada escola, faz a contagem de usuários
+      final List<SchoolParticipationReport> tempSchoolReports = [];
       for (var schoolDoc in schoolsSnapshot.docs) {
         final schoolId = schoolDoc.id;
         final schoolName = schoolDoc.data()['schoolName'] ?? 'Nome não encontrado';
-
-        // Usando a agregação .count() para eficiência
-        final countQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .where('schoolId', isEqualTo: schoolId)
-            .count()
-            .get();
-        
-        // --- CORREÇÃO: Adicionado '?? 0' para garantir que o valor nunca seja nulo ---
-        final participantCount = countQuery.count ?? 0;
-
-        tempReports.add(SchoolParticipationReport(
-          schoolName: schoolName,
-          participantCount: participantCount,
-        ));
+        final countQuery = await FirebaseFirestore.instance.collection('users').where('schoolId', isEqualTo: schoolId).count().get();
+        tempSchoolReports.add(SchoolParticipationReport(schoolName: schoolName, participantCount: countQuery.count ?? 0));
       }
-      
-      // Ordena o relatório por nome da escola
-      tempReports.sort((a, b) => a.schoolName.compareTo(b.schoolName));
+      tempSchoolReports.sort((a, b) => a.schoolName.compareTo(b.schoolName));
 
-      // 3. Atualiza o estado com os dados prontos
+      // Busca dados das empresas
+      final companiesSnapshot = await FirebaseFirestore.instance.collection('companies').get();
+      final List<CompanyParticipationReport> tempCompanyReports = [];
+      for (var companyDoc in companiesSnapshot.docs) {
+        final companyId = companyDoc.id;
+        final companyName = companyDoc.data()['companyName'] ?? 'Nome não encontrado';
+        final countQuery = await FirebaseFirestore.instance.collection('users').where('companyId', isEqualTo: companyId).count().get();
+        tempCompanyReports.add(CompanyParticipationReport(companyName: companyName, participantCount: countQuery.count ?? 0));
+      }
+      tempCompanyReports.sort((a, b) => a.companyName.compareTo(b.companyName));
+
       if (mounted) {
         setState(() {
-          _reports = tempReports;
+          _schoolReports = tempSchoolReports;
+          _companyReports = tempCompanyReports;
           _isLoadingReports = false;
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _isLoadingReports = false;
-        });
-        // Opcional: mostrar um SnackBar ou mensagem de erro
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro ao carregar relatório: ${e.toString()}'))
-        );
+        setState(() => _isLoadingReports = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar relatórios: ${e.toString()}')));
       }
     }
+  }
+
+  Future<void> _exportReportsToCsv() async {
+    List<List<dynamic>> rows = [];
+    rows.add(['Tipo de Entidade', 'Nome da Entidade', 'Nº de Participantes']);
+    for (var report in _schoolReports) {
+      rows.add(['Escola/Faculdade', report.schoolName, report.participantCount]);
+    }
+    rows.add([]); 
+    for (var report in _companyReports) {
+      rows.add(['Empresa', report.companyName, report.participantCount]);
+    }
+    String csv = const ListToCsvConverter().convert(rows);
+    final bytes = utf8.encode(csv);
+    final blob = html.Blob([bytes]);
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final anchor = html.AnchorElement(href: url)
+      ..setAttribute("download", "relatorio_participacao.csv")
+      ..click();
+    html.Url.revokeObjectUrl(url);
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -105,7 +127,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         );
       }
     } catch (e) {
-      // Em um app de produção, seria bom mostrar um SnackBar de erro aqui.
+        // Tratar erro
     }
   }
 
@@ -128,10 +150,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              "Bem-vindo(a), ${user?.displayName ?? 'Admin'}!",
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
+            Text("Bem-vindo(a), ${user?.displayName ?? 'Admin'}!", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 24),
             
             const Text("Estatísticas da Plataforma", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -147,9 +166,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: 24),
 
-            // --- NOVO: Seção do Relatório de Participação ---
-            _buildParticipationReportSection(),
-
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text("Relatórios de Participação", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.download, size: 18),
+                  label: const Text("Exportar"),
+                  onPressed: _isLoadingReports ? null : _exportReportsToCsv,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _isLoadingReports
+                ? const Center(child: CircularProgressIndicator())
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSchoolReportSection(),
+                      const SizedBox(height: 24),
+                      _buildCompanyReportSection(),
+                    ],
+                  ),
+            
             const Divider(height: 48, thickness: 1),
 
             const Text("Ferramentas de Gestão", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -162,40 +205,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               mainAxisSpacing: 16,
               childAspectRatio: 1.2,
               children: [
+                  _buildDashboardCard(context: context, icon: Icons.flag, label: "Gerenciar Campanhas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CampaignManagementScreen()))),
+                  _buildDashboardCard(context: context, icon: Icons.stars, label: "Gerenciar Parceiros", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen()))),
+                  _buildDashboardCard(context: context, icon: Icons.school, label: "Gerenciar Escolas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SchoolManagementScreen()))),
+                  
+                  // --- NOVO: Card para Gerenciar Empresas ---
                   _buildDashboardCard(
-                    context: context, icon: Icons.flag, label: "Gerenciar Campanhas", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CampaignManagementScreen())),
+                    context: context,
+                    icon: Icons.business,
+                    label: "Gerenciar Empresas",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CompanyManagementScreen())),
                   ),
-                  _buildDashboardCard(
-                    context: context, icon: Icons.stars, label: "Gerenciar Parceiros", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen())),
-                  ),
-                  _buildDashboardCard(
-                    context: context, icon: Icons.school, label: "Gerenciar Escolas", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SchoolManagementScreen())),
-                  ),
-                  _buildDashboardCard(
-                    context: context, icon: Icons.inventory_2_outlined, label: "Gestão de Urnas", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UrnManagementScreen())),
-                  ),
-                  _buildDashboardCard(
-                    context: context, icon: Icons.route_outlined, label: "Rota de Coleta", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CollectionRouteScreen())),
-                  ),
-                  _buildDashboardCard(
-                    context: context, icon: Icons.upload, label: "Carga de Escolas", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BulkUploadScreen())),
-                  ),
-                  _buildDashboardCard(
-                    context: context, icon: Icons.group_add, label: "Equipe de Vendas", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesManagementScreen())),
-                    isHighlighted: true,
-                  ),
-                  _buildDashboardCard(
-                    context: context, icon: Icons.monetization_on, label: "Planos de Patrocínio", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SponsorshipPlansScreen())),
-                    isHighlighted: true,
-                  ),
+
+                  _buildDashboardCard(context: context, icon: Icons.inventory_2_outlined, label: "Gestão de Urnas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UrnManagementScreen()))),
+                  _buildDashboardCard(context: context, icon: Icons.route_outlined, label: "Rota de Coleta", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CollectionRouteScreen()))),
+                  _buildDashboardCard(context: context, icon: Icons.upload, label: "Carga de Escolas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BulkUploadScreen()))),
+                  _buildDashboardCard(context: context, icon: Icons.group_add, label: "Equipe de Vendas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesManagementScreen())), isHighlighted: true),
+                  _buildDashboardCard(context: context, icon: Icons.monetization_on, label: "Planos de Patrocínio", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SponsorshipPlansScreen())), isHighlighted: true),
               ],
             ),
           ],
@@ -204,34 +230,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  // --- NOVO: Widget que constrói a tabela do relatório ---
-  Widget _buildParticipationReportSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Relatório de Participação", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        _isLoadingReports
-            ? const Center(child: CircularProgressIndicator())
-            : Card(
-                elevation: 4,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: DataTable(
-                    columns: const [
-                      DataColumn(label: Text('Escola/Faculdade', style: TextStyle(fontWeight: FontWeight.bold))),
-                      DataColumn(label: Text('Participantes', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
-                    ],
-                    rows: _reports.map((report) => DataRow(
-                      cells: [
-                        DataCell(Text(report.schoolName)),
-                        DataCell(Text(report.participantCount.toString())),
-                      ],
-                    )).toList(),
-                  ),
-                ),
-              ),
-      ],
+  Widget _buildSchoolReportSection() {
+    return Card(
+      elevation: 4,
+      child: SizedBox(
+        width: double.infinity,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('Escola/Faculdade', style: TextStyle(fontWeight: FontWeight.bold))),
+            DataColumn(label: Text('Participantes', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+          ],
+          rows: _schoolReports.map((report) => DataRow(
+            cells: [
+              DataCell(Text(report.schoolName)),
+              DataCell(Text(report.participantCount.toString())),
+            ],
+          )).toList(),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildCompanyReportSection() {
+    return Card(
+      elevation: 4,
+      child: SizedBox(
+        width: double.infinity,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('Empresa', style: TextStyle(fontWeight: FontWeight.bold))),
+            DataColumn(label: Text('Participantes', style: TextStyle(fontWeight: FontWeight.bold)), numeric: true),
+          ],
+          rows: _companyReports.map((report) => DataRow(
+            cells: [
+              DataCell(Text(report.companyName)),
+              DataCell(Text(report.participantCount.toString())),
+            ],
+          )).toList(),
+        ),
+      ),
     );
   }
 
