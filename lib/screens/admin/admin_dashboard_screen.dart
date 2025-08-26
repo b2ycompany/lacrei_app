@@ -1,11 +1,11 @@
 // lib/screens/admin/admin_dashboard_screen.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:csv/csv.dart';
 import 'package:universal_html/html.dart' as html;
+import 'dart:convert';
 
 import '../profile_selection_screen.dart';
 import 'partner_management_screen.dart';
@@ -16,18 +16,16 @@ import 'collection_route_screen.dart';
 import 'school_management_screen.dart';
 import 'sales_management_screen.dart';
 import 'sponsorship_plans_screen.dart';
-// --- NOVO: Import da nova tela de gerenciamento de empresas ---
 import 'company_management_screen.dart';
+import 'institution_management_screen.dart';
+import 'sales_report_screen.dart';
 
-
-// Modelo para o relatório de escolas
 class SchoolParticipationReport {
   final String schoolName;
   final int participantCount;
   SchoolParticipationReport({required this.schoolName, required this.participantCount});
 }
 
-// Modelo para o relatório de empresas
 class CompanyParticipationReport {
   final String companyName;
   final int participantCount;
@@ -36,7 +34,6 @@ class CompanyParticipationReport {
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
-
   @override
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
@@ -56,7 +53,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (!mounted) return;
     setState(() => _isLoadingReports = true);
     try {
-      // Busca dados das escolas
       final schoolsSnapshot = await FirebaseFirestore.instance.collection('schools').get();
       final List<SchoolParticipationReport> tempSchoolReports = [];
       for (var schoolDoc in schoolsSnapshot.docs) {
@@ -67,7 +63,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       }
       tempSchoolReports.sort((a, b) => a.schoolName.compareTo(b.schoolName));
 
-      // Busca dados das empresas
       final companiesSnapshot = await FirebaseFirestore.instance.collection('companies').get();
       final List<CompanyParticipationReport> tempCompanyReports = [];
       for (var companyDoc in companiesSnapshot.docs) {
@@ -78,37 +73,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       }
       tempCompanyReports.sort((a, b) => a.companyName.compareTo(b.companyName));
 
-      if (mounted) {
-        setState(() {
-          _schoolReports = tempSchoolReports;
-          _companyReports = tempCompanyReports;
-          _isLoadingReports = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _schoolReports = tempSchoolReports;
+        _companyReports = tempCompanyReports;
+        _isLoadingReports = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoadingReports = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar relatórios: ${e.toString()}')));
-      }
+      if (!mounted) return;
+      setState(() => _isLoadingReports = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar relatórios: ${e.toString()}')));
     }
   }
 
   Future<void> _exportReportsToCsv() async {
     List<List<dynamic>> rows = [];
     rows.add(['Tipo de Entidade', 'Nome da Entidade', 'Nº de Participantes']);
+
     for (var report in _schoolReports) {
       rows.add(['Escola/Faculdade', report.schoolName, report.participantCount]);
     }
-    rows.add([]); 
     for (var report in _companyReports) {
       rows.add(['Empresa', report.companyName, report.participantCount]);
     }
+
     String csv = const ListToCsvConverter().convert(rows);
+
     final bytes = utf8.encode(csv);
     final blob = html.Blob([bytes]);
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
-      ..setAttribute("download", "relatorio_participacao.csv")
+    html.AnchorElement(href: url)
+      ..setAttribute("download", "relatorio_participacao_lacrei.csv")
       ..click();
     html.Url.revokeObjectUrl(url);
   }
@@ -120,14 +115,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         await GoogleSignIn().signOut();
       }
       await FirebaseAuth.instance.signOut();
-      if (context.mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const ProfileSelectionScreen()),
-          (route) => false,
-        );
-      }
+      
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const ProfileSelectionScreen()),
+        (route) => false,
+      );
     } catch (e) {
-        // Tratar erro
+      // Handle error
     }
   }
 
@@ -168,16 +163,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const Text("Relatórios de Participação", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.download, size: 18),
                   label: const Text("Exportar"),
                   onPressed: _isLoadingReports ? null : _exportReportsToCsv,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  ),
                 ),
               ],
             ),
@@ -205,23 +196,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               mainAxisSpacing: 16,
               childAspectRatio: 1.2,
               children: [
-                  _buildDashboardCard(context: context, icon: Icons.flag, label: "Gerenciar Campanhas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CampaignManagementScreen()))),
-                  _buildDashboardCard(context: context, icon: Icons.stars, label: "Gerenciar Parceiros", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen()))),
-                  _buildDashboardCard(context: context, icon: Icons.school, label: "Gerenciar Escolas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SchoolManagementScreen()))),
-                  
-                  // --- NOVO: Card para Gerenciar Empresas ---
+                  _buildDashboardCard(
+                    context: context,
+                    icon: Icons.bar_chart,
+                    label: "Relatório de Vendas",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesReportScreen())),
+                    isHighlighted: true,
+                  ),
+                  _buildDashboardCard(
+                    context: context,
+                    icon: Icons.group_add,
+                    label: "Equipe de Vendas",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesManagementScreen())),
+                    isHighlighted: true,
+                  ),
+                  _buildDashboardCard(
+                    context: context,
+                    icon: Icons.monetization_on,
+                    label: "Planos de Patrocínio",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SponsorshipPlansScreen())),
+                    isHighlighted: true,
+                  ),
                   _buildDashboardCard(
                     context: context,
                     icon: Icons.business,
                     label: "Gerenciar Empresas",
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CompanyManagementScreen())),
                   ),
-
-                  _buildDashboardCard(context: context, icon: Icons.inventory_2_outlined, label: "Gestão de Urnas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UrnManagementScreen()))),
-                  _buildDashboardCard(context: context, icon: Icons.route_outlined, label: "Rota de Coleta", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CollectionRouteScreen()))),
-                  _buildDashboardCard(context: context, icon: Icons.upload, label: "Carga de Escolas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BulkUploadScreen()))),
-                  _buildDashboardCard(context: context, icon: Icons.group_add, label: "Equipe de Vendas", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesManagementScreen())), isHighlighted: true),
-                  _buildDashboardCard(context: context, icon: Icons.monetization_on, label: "Planos de Patrocínio", onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SponsorshipPlansScreen())), isHighlighted: true),
+                  _buildDashboardCard(
+                    context: context,
+                    icon: Icons.school,
+                    label: "Gerenciar Escolas",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SchoolManagementScreen())),
+                  ),
+                  _buildDashboardCard(
+                    context: context,
+                    icon: Icons.corporate_fare,
+                    label: "Gerenciar Instituições",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InstitutionManagementScreen())),
+                  ),
+                  _buildDashboardCard(
+                    context: context, icon: Icons.inventory_2_outlined, label: "Gestão de Urnas", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UrnManagementScreen())),
+                  ),
+                  _buildDashboardCard(
+                    context: context, icon: Icons.stars, label: "Gerenciar Parceiros", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen())),
+                  ),
               ],
             ),
           ],

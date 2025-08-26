@@ -1,31 +1,28 @@
-// lib/screens/admin/add_edit_school_screen.dart
+// lib/screens/admin/edit_institution_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
-class AddEditSchoolScreen extends StatefulWidget {
-  final DocumentSnapshot? school;
+class EditInstitutionScreen extends StatefulWidget {
+  final String? institutionId;
 
-  const AddEditSchoolScreen({super.key, this.school});
+  const EditInstitutionScreen({super.key, this.institutionId});
 
   @override
-  State<AddEditSchoolScreen> createState() => _AddEditSchoolScreenState();
+  State<EditInstitutionScreen> createState() => _EditInstitutionScreenState();
 }
 
-class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
+class _EditInstitutionScreenState extends State<EditInstitutionScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _cepController = TextEditingController();
   final _addressController = TextEditingController();
   final _addressNumberController = TextEditingController();
-  final _addressDistrictController = TextEditingController();
-  final _addressCityController = TextEditingController();
-  final _addressStateController = TextEditingController();
 
-  bool _isLoading = false;
-  bool get _isEditing => widget.school != null;
+  bool _isLoading = true;
+  bool get _isEditing => widget.institutionId != null;
 
   final _phoneMaskFormatter = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _cepMaskFormatter = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
@@ -34,50 +31,53 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
   void initState() {
     super.initState();
     if (_isEditing) {
-      _loadSchoolData();
+      _loadInstitutionData();
+    } else {
+      setState(() => _isLoading = false);
     }
   }
 
-  void _loadSchoolData() {
-    final data = widget.school!.data() as Map<String, dynamic>;
-    _nameController.text = data['schoolName'] ?? '';
-    _phoneController.text = data['schoolPhone'] ?? '';
-    _cepController.text = data['cep'] ?? '';
-    _addressController.text = data['address']?.split(',').first ?? '';
-    _addressNumberController.text = data['address']?.split(',').length > 1 ? data['address'].split(',')[1].trim() : '';
-    _addressDistrictController.text = data['schoolDistrict'] ?? '';
-    _addressCityController.text = data['city'] ?? '';
-    _addressStateController.text = data['schoolState'] ?? '';
+  Future<void> _loadInstitutionData() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('institutions').doc(widget.institutionId).get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        _nameController.text = data['institutionName'] ?? '';
+        _phoneController.text = data['institutionPhone'] ?? '';
+        _cepController.text = data['cep'] ?? '';
+        _addressController.text = data['address'] ?? '';
+        // Note: O número não está salvo separadamente, então este campo pode ficar vazio
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
-  Future<void> _saveSchool() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+  Future<void> _saveInstitution() async {
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
-    final schoolData = {
-      'schoolName': _nameController.text.trim(),
-      'schoolPhone': _phoneController.text.trim(),
+    final institutionData = {
+      'institutionName': _nameController.text.trim(),
+      'institutionPhone': _phoneController.text.trim(),
       'cep': _cepController.text.trim(),
       'address': '${_addressController.text.trim()}, ${_addressNumberController.text.trim()}',
-      'schoolDistrict': _addressDistrictController.text.trim(),
-      'city': _addressCityController.text.trim(),
-      'schoolState': _addressStateController.text.trim(),
       if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
     };
 
     try {
       if (_isEditing) {
-        await widget.school!.reference.update(schoolData);
+        await FirebaseFirestore.instance.collection('institutions').doc(widget.institutionId).update(institutionData);
       } else {
-        await FirebaseFirestore.instance.collection('schools').add(schoolData);
+        await FirebaseFirestore.instance.collection('institutions').add(institutionData);
       }
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Salvo com sucesso!'), backgroundColor: Colors.green)
+          const SnackBar(content: Text('Instituição salva com sucesso!'), backgroundColor: Colors.green)
         );
         Navigator.of(context).pop();
       }
@@ -93,11 +93,11 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Editar Escola/Faculdade' : 'Adicionar Escola/Faculdade'),
+        title: Text(_isEditing ? 'Editar Instituição' : 'Adicionar Instituição'),
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: _isLoading ? null : _saveSchool,
+            onPressed: _isLoading ? null : _saveInstitution,
           ),
         ],
       ),
@@ -110,7 +110,7 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
                 children: [
                   TextFormField(
                     controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Nome da Escola/Faculdade'),
+                    decoration: const InputDecoration(labelText: 'Nome da Instituição'),
                     validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
                   ),
                   const SizedBox(height: 16),
@@ -137,21 +137,6 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
                     controller: _addressNumberController,
                     decoration: const InputDecoration(labelText: 'Número'),
                     keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressDistrictController,
-                    decoration: const InputDecoration(labelText: 'Bairro'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressCityController,
-                    decoration: const InputDecoration(labelText: 'Cidade'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressStateController,
-                    decoration: const InputDecoration(labelText: 'Estado'),
                   ),
                 ],
               ),

@@ -1,9 +1,23 @@
 // lib/screens/admin/edit_company_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+
+class Salesperson {
+  final String id;
+  final String name;
+  Salesperson({required this.id, required this.name});
+}
+
+class SponsorshipPlan {
+  final String id;
+  final String name;
+  SponsorshipPlan({required this.id, required this.name});
+}
 
 class EditCompanyScreen extends StatefulWidget {
-  final String? companyId; // Pode ser nulo se estivermos criando uma nova empresa
+  final String? companyId;
 
   const EditCompanyScreen({super.key, this.companyId});
 
@@ -19,84 +33,108 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
   bool _isLoading = true;
   bool get _isEditing => widget.companyId != null;
 
+  List<Salesperson> _salespeopleList = [];
+  List<SponsorshipPlan> _plansList = [];
+  Salesperson? _selectedSalesperson;
+  SponsorshipPlan? _selectedPlan;
+  String? _selectedStatus;
+
+  final List<String> _statusOptions = ['Prospect', 'Urna Instalada', 'Patrocinador Ativo', 'Inativo'];
+  final _cnpjMaskFormatter = MaskTextInputFormatter(mask: '##.###.###/####-##', filter: {"#": RegExp(r'[0-9]')});
+
   @override
   void initState() {
     super.initState();
-    // Se for modo de edição, busca os dados da empresa no Firebase
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    await _loadDropdownData();
     if (_isEditing) {
-      _fetchCompanyData();
-    } else {
-      // Se for modo de criação, já pode exibir o formulário
-      setState(() {
-        _isLoading = false;
-      });
+      await _loadCompanyData();
+    }
+    if(mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
-  Future<void> _fetchCompanyData() async {
+  Future<void> _loadDropdownData() async {
+    try {
+      final salespeopleSnapshot = await FirebaseFirestore.instance.collection('salespeople').get();
+      _salespeopleList = salespeopleSnapshot.docs.map((doc) {
+        return Salesperson(id: doc.id, name: doc.data()['name'] ?? 'Nome não encontrado');
+      }).toList();
+
+      final plansSnapshot = await FirebaseFirestore.instance.collection('sponsorship_plans').get();
+      _plansList = plansSnapshot.docs.map((doc) {
+        return SponsorshipPlan(id: doc.id, name: doc.data()['planName'] ?? 'Nome não encontrado');
+      }).toList();
+    } catch (e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar vendedores/planos: $e')));
+      }
+    }
+  }
+
+  Future<void> _loadCompanyData() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('companies').doc(widget.companyId).get();
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         _nameController.text = data['companyName'] ?? '';
         _cnpjController.text = data['cnpj'] ?? '';
+        _selectedStatus = data['sponsorshipStatus'];
+        
+        final salespersonId = data['contactedBySalespersonId'];
+        if (salespersonId != null) {
+          _selectedSalesperson = _salespeopleList.firstWhere((s) => s.id == salespersonId, orElse: () => _salespeopleList.first);
+        }
+
+        final planId = data['sponsorshipPlanId'];
+        if (planId != null) {
+          _selectedPlan = _plansList.firstWhere((p) => p.id == planId, orElse: () => _plansList.first);
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao carregar dados da empresa: $e'), backgroundColor: Colors.red)
-      );
-    } finally {
-      if(mounted){
-        setState(() => _isLoading = false);
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados da empresa: $e')));
       }
     }
   }
 
   Future<void> _saveCompany() async {
-    // Valida o formulário
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    final companyData = {
+      'companyName': _nameController.text.trim(),
+      'cnpj': _cnpjController.text.trim(),
+      'contactedBySalespersonId': _selectedSalesperson?.id,
+      'sponsorshipPlanId': _selectedPlan?.id,
+      'sponsorshipStatus': _selectedStatus,
+      if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
+    };
+
+    try {
+      if (_isEditing) {
+        await FirebaseFirestore.instance.collection('companies').doc(widget.companyId).update(companyData);
+      } else {
+        await FirebaseFirestore.instance.collection('companies').add(companyData);
+      }
       
-      final companyData = {
-        'companyName': _nameController.text.trim(),
-        'cnpj': _cnpjController.text.trim(),
-      };
-
-      try {
-        if (_isEditing) {
-          // ATUALIZA um documento existente
-          await FirebaseFirestore.instance.collection('companies').doc(widget.companyId).update(companyData);
-        } else {
-          // CRIA um novo documento
-          await FirebaseFirestore.instance.collection('companies').add(companyData);
-        }
-
-        if(mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Empresa salva com sucesso!'), backgroundColor: Colors.green)
-          );
-          Navigator.of(context).pop(); // Volta para a tela de listagem
-        }
-
-      } catch (e) {
-        if(mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro ao salvar empresa: $e'), backgroundColor: Colors.red)
-          );
-        }
-      } finally {
-        if(mounted) {
-          setState(() => _isLoading = false);
-        }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Empresa salva com sucesso!'), backgroundColor: Colors.green)
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+        setState(() => _isLoading = false);
       }
     }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _cnpjController.dispose();
-    super.dispose();
   }
 
   @override
@@ -108,48 +146,58 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
           IconButton(
             icon: const Icon(Icons.save),
             onPressed: _isLoading ? null : _saveCompany,
-            tooltip: 'Salvar',
-          )
+          ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextFormField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(labelText: 'Nome da Empresa'),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Por favor, insira o nome da empresa.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _cnpjController,
-                      decoration: const InputDecoration(labelText: 'CNPJ'),
-                      // Validação simples, pode ser melhorada com um validador de CNPJ
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Por favor, insira o CNPJ.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 32),
-                    ElevatedButton(
-                      onPressed: _isLoading ? null : _saveCompany,
-                      child: const Text('Salvar'),
-                    ),
-                  ],
-                ),
+          : Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.all(16.0),
+                children: [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Nome da Empresa'),
+                    validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _cnpjController,
+                    decoration: const InputDecoration(labelText: 'CNPJ'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [_cnpjMaskFormatter],
+                    validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<Salesperson>(
+                    value: _selectedSalesperson,
+                    decoration: const InputDecoration(labelText: 'Vendedor Responsável'),
+                    items: _salespeopleList.map((salesperson) {
+                      return DropdownMenuItem(value: salesperson, child: Text(salesperson.name));
+                    }).toList(),
+                    onChanged: (value) => setState(() => _selectedSalesperson = value),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<SponsorshipPlan>(
+                    value: _selectedPlan,
+                    decoration: const InputDecoration(labelText: 'Plano de Patrocínio'),
+                    items: _plansList.map((plan) {
+                      return DropdownMenuItem(value: plan, child: Text(plan.name));
+                    }).toList(),
+                    onChanged: (value) => setState(() => _selectedPlan = value),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _selectedStatus,
+                    decoration: const InputDecoration(labelText: 'Status do Patrocínio'),
+                    items: _statusOptions.map((status) {
+                      return DropdownMenuItem(value: status, child: Text(status));
+                    }).toList(),
+                    onChanged: (value) => setState(() => _selectedStatus = value),
+                    validator: (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null,
+                  ),
+                ],
               ),
             ),
     );

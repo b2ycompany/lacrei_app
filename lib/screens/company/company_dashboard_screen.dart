@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
-// REUTILIZANDO O WIDGET DE GESTÃO DE URNAS
+import 'package:google_sign_in/google_sign_in.dart';
+import '../profile_selection_screen.dart';
 import '../school_admin/school_admin_dashboard_screen.dart'; 
 
 class CompanyDashboardScreen extends StatefulWidget {
@@ -22,25 +22,28 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
 
   Future<void> _registerCollection() async {
     if (!_formKey.currentState!.validate() || _user == null) return;
+    if(!mounted) return;
     setState(() => _isRegistering = true);
 
     try {
       final weightToAdd = double.parse(_weightController.text.replaceAll(',', '.'));
-      final companyRef = FirebaseFirestore.instance.collection('companies').doc(_user.uid);
+      final companyRef = FirebaseFirestore.instance.collection('companies').doc(_user!.uid);
 
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         transaction.update(companyRef, {'totalCollectedKg': FieldValue.increment(weightToAdd)});
       });
 
       await companyRef.collection('collections').add({
-        'weight': weightToAdd, 'date': Timestamp.now(), 'registeredBy': _user.displayName ?? _user.email,
+        'weight': weightToAdd, 'date': Timestamp.now(), 'registeredBy': _user!.displayName ?? _user!.email,
       });
 
+      if(!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Coleta registrada com sucesso!"), backgroundColor: Colors.green));
       _weightController.clear();
       FocusScope.of(context).unfocus();
 
     } catch (e) {
+      if(!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao registrar coleta: ${e.toString()}"), backgroundColor: Colors.red));
     } finally {
       if(mounted) setState(() => _isRegistering = false);
@@ -48,7 +51,17 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   }
   
   Future<void> _logout() async {
-    // ... (lógica de logout, sem alterações)
+    try {
+      await FirebaseAuth.instance.signOut();
+      await GoogleSignIn().signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const ProfileSelectionScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      // Handle error
+    }
   }
 
   @override
@@ -65,7 +78,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
         ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('companies').doc(_user.uid).snapshots(),
+        stream: FirebaseFirestore.instance.collection('companies').doc(_user!.uid).snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -86,6 +99,8 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                   children: [
                     Text(companyData['companyName'] ?? 'Sua Empresa', textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 24),
+                    
+                    // MÉTRICAS EM CARDS
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(20.0),
@@ -98,8 +113,33 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+
+                    // --- NOVO: Card para contar os funcionários participantes ---
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .where('companyId', isEqualTo: _user!.uid)
+                          .snapshots(),
+                      builder: (context, userSnapshot) {
+                        final count = userSnapshot.data?.docs.length ?? 0;
+                        return Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Column(
+                              children: [
+                                const Text("Funcionários Participantes", style: TextStyle(fontSize: 18, color: Colors.white70)),
+                                const SizedBox(height: 12),
+                                Text(count.toString(), style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.purpleAccent)),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
                     const SizedBox(height: 40),
-                    // Formulário de Registro de Coleta (sem alterações)
+                    
                     Text("Registrar Nova Coleta", style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white)),
                     const SizedBox(height: 16),
                     Form(
@@ -122,8 +162,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                       label: const Text("Registrar Coleta"),
                     ),
                     const Divider(height: 48),
-                    // NOVO: Adicionada a visão de status da urna
-                    UrnStatusView(assignedToId: _user.uid),
+                    UrnStatusView(assignedToId: _user!.uid),
                   ],
                 ),
               ),

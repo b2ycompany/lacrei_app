@@ -1,19 +1,19 @@
-// lib/screens/admin/add_edit_school_screen.dart
+// lib/screens/admin/edit_school_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
-class AddEditSchoolScreen extends StatefulWidget {
-  final DocumentSnapshot? school;
+class EditSchoolScreen extends StatefulWidget {
+  final String? schoolId;
 
-  const AddEditSchoolScreen({super.key, this.school});
+  const EditSchoolScreen({super.key, this.schoolId});
 
   @override
-  State<AddEditSchoolScreen> createState() => _AddEditSchoolScreenState();
+  State<EditSchoolScreen> createState() => _EditSchoolScreenState();
 }
 
-class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
+class _EditSchoolScreenState extends State<EditSchoolScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -24,8 +24,8 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
   final _addressCityController = TextEditingController();
   final _addressStateController = TextEditingController();
 
-  bool _isLoading = false;
-  bool get _isEditing => widget.school != null;
+  bool _isLoading = true;
+  bool get _isEditing => widget.schoolId != null;
 
   final _phoneMaskFormatter = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _cepMaskFormatter = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
@@ -35,25 +35,34 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
     super.initState();
     if (_isEditing) {
       _loadSchoolData();
+    } else {
+      setState(() => _isLoading = false);
     }
   }
 
-  void _loadSchoolData() {
-    final data = widget.school!.data() as Map<String, dynamic>;
-    _nameController.text = data['schoolName'] ?? '';
-    _phoneController.text = data['schoolPhone'] ?? '';
-    _cepController.text = data['cep'] ?? '';
-    _addressController.text = data['address']?.split(',').first ?? '';
-    _addressNumberController.text = data['address']?.split(',').length > 1 ? data['address'].split(',')[1].trim() : '';
-    _addressDistrictController.text = data['schoolDistrict'] ?? '';
-    _addressCityController.text = data['city'] ?? '';
-    _addressStateController.text = data['schoolState'] ?? '';
+  Future<void> _loadSchoolData() async {
+    try {
+      final doc = await FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        _nameController.text = data['schoolName'] ?? '';
+        _phoneController.text = data['schoolPhone'] ?? '';
+        _cepController.text = data['cep'] ?? '';
+        _addressController.text = data['address']?.split(',').first ?? '';
+        _addressNumberController.text = data['address']?.split(',').length > 1 ? data['address'].split(',')[1].trim() : '';
+        _addressDistrictController.text = data['schoolDistrict'] ?? '';
+        _addressCityController.text = data['city'] ?? '';
+        _addressStateController.text = data['schoolState'] ?? '';
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _saveSchool() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
@@ -70,7 +79,7 @@ class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
 
     try {
       if (_isEditing) {
-        await widget.school!.reference.update(schoolData);
+        await FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).update(schoolData);
       } else {
         await FirebaseFirestore.instance.collection('schools').add(schoolData);
       }
