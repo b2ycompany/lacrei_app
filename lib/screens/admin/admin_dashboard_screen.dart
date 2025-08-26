@@ -218,6 +218,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     isHighlighted: true,
                   ),
                   _buildDashboardCard(
+                    context: context, icon: Icons.flag, label: "Gerenciar Campanhas", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CampaignManagementScreen())),
+                  ),
+                  _buildDashboardCard(
                     context: context,
                     icon: Icons.business,
                     label: "Gerenciar Empresas",
@@ -236,12 +240,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const InstitutionManagementScreen())),
                   ),
                   _buildDashboardCard(
+                    context: context, icon: Icons.stars, label: "Gerenciar Parceiros", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen())),
+                  ),
+                  _buildDashboardCard(
                     context: context, icon: Icons.inventory_2_outlined, label: "Gestão de Urnas", 
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UrnManagementScreen())),
                   ),
                   _buildDashboardCard(
-                    context: context, icon: Icons.stars, label: "Gerenciar Parceiros", 
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PartnerManagementScreen())),
+                    context: context, icon: Icons.route_outlined, label: "Rota de Coleta", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const CollectionRouteScreen())),
+                  ),
+                  _buildDashboardCard(
+                    context: context, icon: Icons.upload, label: "Carga de Escolas", 
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const BulkUploadScreen())),
                   ),
               ],
             ),
