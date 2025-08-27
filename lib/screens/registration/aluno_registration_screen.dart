@@ -38,7 +38,6 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
   List<School> _schoolsList = [];
   School? _selectedSchool;
 
-  // --- NOVO: Variáveis para o Nível de Ensino ---
   String? _selectedEducationLevel;
   final List<String> _educationLevels = ['Ensino Fundamental', 'Ensino Médio', 'Ensino Superior'];
 
@@ -48,7 +47,8 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
 
   String _userType = 'aluno';
   final _positionController = TextEditingController();
-  final _gradeController = TextEditingController();
+  // --- REMOVIDO: Controlador do campo 'Série / Ano' ---
+  // final _gradeController = TextEditingController(); 
   final _guardianController = TextEditingController();
   bool _showGuardianTerms = false;
   int _calculatedAge = 0;
@@ -99,7 +99,8 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
     _addressStateController.dispose();
     _instagramController.dispose();
     _positionController.dispose();
-    _gradeController.dispose();
+    // --- REMOVIDO: Dispose do controlador 'Série / Ano' ---
+    // _gradeController.dispose(); 
     _guardianController.dispose();
     _cepFocusNode.dispose();
     super.dispose();
@@ -157,9 +158,8 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
         'schoolLinkStatus': 'pending', 'phone': _phoneController.text.trim(), 'birthDate': _birthDateController.text.trim(),
         'cep': _cepController.text.trim(), 'address': _addressController.text.trim(), 'createdAt': Timestamp.now(),
         'age': _calculatedAge, 'userType': _userType,
-        // --- NOVO: Salvando o nível de ensino no banco de dados ---
         'educationLevel': _selectedEducationLevel,
-        'grade': _userType == 'aluno' ? _gradeController.text.trim() : null,
+        // --- REMOVIDO: Campo 'grade' não é mais salvo ---
         'position': _userType == 'funcionario' ? _positionController.text.trim() : null,
         'guardianName': _showGuardianTerms ? _guardianController.text.trim() : null,
         'luckyNumber': luckyNumber,
@@ -341,7 +341,6 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
                     ),
                     const SizedBox(height: 16),
                     
-                    // --- NOVO: Campo de Nível de Ensino ---
                     DropdownButtonFormField<String>(
                       decoration: _buildInputDecoration('Nível de Ensino'),
                       value: _selectedEducationLevel,
@@ -356,11 +355,12 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
 
                     if (_userType == 'funcionario')
                         TextFormField(controller: _positionController, decoration: _buildInputDecoration('Qual o seu Cargo?'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null).animate().fade(),
-                    if (_userType == 'aluno')
-                        TextFormField(controller: _gradeController, decoration: _buildInputDecoration('Série / Ano'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null).animate().fade(),
-                    const SizedBox(height: 16),
                     
-                    // --- ALTERADO: Label do campo ---
+                    // --- REMOVIDO: Campo "Série / Ano" ---
+                    // if (_userType == 'aluno')
+                    //     TextFormField(controller: _gradeController, decoration: _buildInputDecoration('Série / Ano'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null).animate().fade(),
+                    // const SizedBox(height: 16),
+                    
                     DropdownButtonFormField<School>(decoration: _buildInputDecoration('Selecione sua Escola/Faculdade'), value: _selectedSchool, items: _schoolsList.map((s) => DropdownMenuItem(value: s, child: Text(s.name, overflow: TextOverflow.ellipsis))).toList(), onChanged: (s) => setState(() => _selectedSchool = s), validator: (value) => value == null ? 'Obrigatório' : null, isExpanded: true),
                     const SizedBox(height: 16),
                     TextFormField(controller: _birthDateController, decoration: _buildInputDecoration('Data de Nascimento', suffixIcon: const Icon(Icons.calendar_today)), inputFormatters: [_birthDateMaskFormatter], onTap: () => _selectDate(context), readOnly: true, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),

@@ -99,8 +99,8 @@ class CompanyManagementScreen extends StatelessWidget {
             ),
           );
         },
-        child: const Icon(Icons.add),
         tooltip: 'Adicionar Empresa',
+        child: const Icon(Icons.add),
       ),
     );
   }

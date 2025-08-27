@@ -154,7 +154,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               children: [
                 _buildMetricCard('schools', 'Escolas', Colors.orangeAccent),
                 const SizedBox(width: 16),
-                _buildMetricCard('companies', 'Empresas', Colors.lightBlueAccent),
+                // --- ALTERAÇÃO APLICADA AQUI ---
+                _buildMetricCard('companies', 'Empresas Participantes', Colors.lightBlueAccent), // Texto alterado
                 const SizedBox(width: 16),
                 _buildMetricCard('users', 'Usuários', Colors.purpleAccent),
               ],

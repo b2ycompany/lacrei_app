@@ -91,7 +91,7 @@ class _SalespersonRegistrationScreenState extends State<SalespersonRegistrationS
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Vendedor salvo com sucesso!"), backgroundColor: Colors.green),
+          const SnackBar(content: Text("Vendedor salvo com sucesso!"), backgroundColor: Colors.green),
         );
         Navigator.of(context).pop();
       }

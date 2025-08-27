@@ -38,6 +38,11 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
   Salesperson? _selectedSalesperson;
   SponsorshipPlan? _selectedPlan;
   String? _selectedStatus;
+  
+  // --- NOVO: Variáveis para o Tipo de Empresa ---
+  String? _selectedCompanyType;
+  final List<String> _companyTypeOptions = ['Patrocinadora', 'Ponto de Coleta', 'Apoiadora', 'Parceira Logística'];
+  // --- FIM NOVO ---
 
   final List<String> _statusOptions = ['Prospect', 'Urna Instalada', 'Patrocinador Ativo', 'Inativo'];
   final _cnpjMaskFormatter = MaskTextInputFormatter(mask: '##.###.###/####-##', filter: {"#": RegExp(r'[0-9]')});
@@ -85,14 +90,19 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
         _cnpjController.text = data['cnpj'] ?? '';
         _selectedStatus = data['sponsorshipStatus'];
         
+        // --- NOVO: Carrega o tipo de empresa salvo ---
+        _selectedCompanyType = data['companyType'];
+        // --- FIM NOVO ---
+
         final salespersonId = data['contactedBySalespersonId'];
         if (salespersonId != null) {
-          _selectedSalesperson = _salespeopleList.firstWhere((s) => s.id == salespersonId, orElse: () => _salespeopleList.first);
+          // Usando .where()..firstOrNull para evitar erros se o vendedor for deletado
+          _selectedSalesperson = _salespeopleList.where((s) => s.id == salespersonId).firstOrNull;
         }
 
         final planId = data['sponsorshipPlanId'];
         if (planId != null) {
-          _selectedPlan = _plansList.firstWhere((p) => p.id == planId, orElse: () => _plansList.first);
+          _selectedPlan = _plansList.where((p) => p.id == planId).firstOrNull;
         }
       }
     } catch (e) {
@@ -113,6 +123,9 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
       'contactedBySalespersonId': _selectedSalesperson?.id,
       'sponsorshipPlanId': _selectedPlan?.id,
       'sponsorshipStatus': _selectedStatus,
+      // --- NOVO: Salva o tipo de empresa no Firestore ---
+      'companyType': _selectedCompanyType,
+      // --- FIM NOVO ---
       if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
     };
 
@@ -170,6 +183,20 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
                     validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
                   ),
                   const SizedBox(height: 16),
+
+                  // --- NOVO: Campo para selecionar o Tipo de Empresa ---
+                  DropdownButtonFormField<String>(
+                    value: _selectedCompanyType,
+                    decoration: const InputDecoration(labelText: 'Tipo de Empresa'),
+                    items: _companyTypeOptions.map((type) {
+                      return DropdownMenuItem(value: type, child: Text(type));
+                    }).toList(),
+                    onChanged: (value) => setState(() => _selectedCompanyType = value),
+                    validator: (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  // --- FIM NOVO ---
+
                   DropdownButtonFormField<Salesperson>(
                     value: _selectedSalesperson,
                     decoration: const InputDecoration(labelText: 'Vendedor Responsável'),

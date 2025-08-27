@@ -1,5 +1,8 @@
+// lib/screens/sales/salesperson_login_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import necessário para a verificação de perfil
 import 'salesperson_dashboard_screen.dart'; 
 
 class SalespersonLoginScreen extends StatefulWidget {
@@ -21,16 +24,32 @@ class _SalespersonLoginScreenState extends State<SalespersonLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      if (mounted) {
+      final user = userCredential.user;
+      if (user == null) {
+        throw Exception("Usuário não encontrado após o login.");
+      }
+
+      // --- MELHORIA DE SEGURANÇA ADICIONADA AQUI ---
+      // Após o login, verificamos se o usuário tem a permissão (role) correta.
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+
+      if (mounted && userDoc.exists && userDoc.data()?['role'] == 'salesperson') {
+        // Se for um vendedor, permite o acesso.
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const SalespersonDashboardScreen()),
         );
+      } else {
+        // Se não for um vendedor (ou o perfil não existir), desloga e exibe um erro.
+        await FirebaseAuth.instance.signOut();
+        _showSnackBar('As suas credenciais não pertencem a um perfil de vendedor.');
       }
+      // --- FIM DA MELHORIA DE SEGURANÇA ---
+
     } on FirebaseAuthException catch (e) {
       String message = 'Ocorreu um erro ao tentar fazer o login.';
       if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
@@ -49,6 +68,7 @@ class _SalespersonLoginScreenState extends State<SalespersonLoginScreen> {
   }
 
   void _showSnackBar(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -80,12 +100,11 @@ class _SalespersonLoginScreenState extends State<SalespersonLoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // --- MUDANÇA: LOGO ADICIONADO AQUI ---
                 Image.asset(
                   'assets/assets/Marca_Lacrei.png',
-                  height: 60, // Ajuste a altura conforme necessário
+                  height: 60,
                 ),
-                const SizedBox(height: 48), // Espaçamento maior após o logo
+                const SizedBox(height: 48),
 
                 TextFormField(
                   controller: _emailController,

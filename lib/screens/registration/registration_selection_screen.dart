@@ -30,7 +30,6 @@ class RegistrationSelectionScreen extends StatelessWidget {
             ).animate().fade(duration: 500.ms),
             const SizedBox(height: 40),
             
-            // --- ALTERAÇÃO: Cores atualizadas com base no logo ---
             _buildRegistrationButton(
               context: context,
               label: 'Sou Aluno / Funcionário',
@@ -55,9 +54,11 @@ class RegistrationSelectionScreen extends StatelessWidget {
               delay: 700.ms,
             ),
             const SizedBox(height: 20),
+            
+            // --- ALTERAÇÃO APLICADA AQUI ---
             _buildRegistrationButton(
               context: context,
-              label: 'Sou uma Empresa',
+              label: 'Sou uma Empresa Parceira', // Texto alterado
               destination: const CompanyRegistrationScreen(),
               color: const Color(0xFFFF6600), // Laranja
               delay: 900.ms,

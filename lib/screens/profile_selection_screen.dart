@@ -50,17 +50,19 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                         .animate().fade(delay: 400.ms, duration: 800.ms),
                     const SizedBox(height: 60),
 
-                    // --- ALTERAÇÃO: Cores atualizadas com base no logo ---
+                    // --- ALTERAÇÕES APLICADAS AQUI ---
                     _ProfileButton(label: 'Aluno / Funcionário', color: const Color(0xFF99CC33), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 600.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
-                    _ProfileButton(label: 'Admin. Escola', color: const Color(0xFF9966CC), onPressed: () => _navigateToLogin(context))
+                    // 1. Cor alterada para verde
+                    _ProfileButton(label: 'Admin. Escola', color: const Color(0xFF99CC33), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 800.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
                     _ProfileButton(label: 'Instituição', color: const Color(0xFFCC6699), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 1000.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
                     const SizedBox(height: 20),
-                    _ProfileButton(label: 'Empresa', color: const Color(0xFFFF6600), onPressed: () => _navigateToLogin(context))
+                    // 2. Texto alterado para "Empresa Parceira"
+                    _ProfileButton(label: 'Empresa Parceira', color: const Color(0xFFFF6600), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 1200.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
                     
                     const SizedBox(height: 40),
