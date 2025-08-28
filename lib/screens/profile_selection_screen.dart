@@ -50,20 +50,20 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                         .animate().fade(delay: 400.ms, duration: 800.ms),
                     const SizedBox(height: 60),
 
-                    // --- ALTERAÇÕES APLICADAS AQUI ---
                     _ProfileButton(label: 'Aluno / Funcionário', color: const Color(0xFF99CC33), onPressed: () => _navigateToLogin(context))
-                        .animate().fade(delay: 600.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
+                        .animate().fade(delay: 600.ms),
                     const SizedBox(height: 20),
-                    // 1. Cor alterada para verde
                     _ProfileButton(label: 'Admin. Escola', color: const Color(0xFF99CC33), onPressed: () => _navigateToLogin(context))
-                        .animate().fade(delay: 800.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
+                        .animate().fade(delay: 700.ms),
                     const SizedBox(height: 20),
                     _ProfileButton(label: 'Instituição', color: const Color(0xFFCC6699), onPressed: () => _navigateToLogin(context))
-                        .animate().fade(delay: 1000.ms).slideX(begin: -1, curve: Curves.easeOutCubic),
+                        .animate().fade(delay: 800.ms),
                     const SizedBox(height: 20),
-                    // 2. Texto alterado para "Empresa Parceira"
-                    _ProfileButton(label: 'Empresa Parceira', color: const Color(0xFFFF6600), onPressed: () => _navigateToLogin(context))
-                        .animate().fade(delay: 1200.ms).slideX(begin: 1, curve: Curves.easeOutCubic),
+                    _ProfileButton(label: 'Admin Empresa', color: const Color(0xFFFF6600), onPressed: () => _navigateToLogin(context))
+                        .animate().fade(delay: 900.ms),
+                    const SizedBox(height: 20),
+                    _ProfileButton(label: 'Colaborador Empresa', color: const Color(0xFFFF6600), onPressed: () => _navigateToLogin(context))
+                        .animate().fade(delay: 1000.ms),
                     
                     const SizedBox(height: 40),
                     

@@ -5,7 +5,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'aluno_registration_screen.dart';
 import 'adm_escola_registration_screen.dart';
 import 'instituicao_registration_screen.dart';
-import 'company_registration_screen.dart'; 
+// --- NOVOS IMPORTS ---
+import 'admin_empresa_registration_screen.dart';
+import 'colaborador_empresa_registration_screen.dart';
 
 class RegistrationSelectionScreen extends StatelessWidget {
   const RegistrationSelectionScreen({super.key});
@@ -32,36 +34,42 @@ class RegistrationSelectionScreen extends StatelessWidget {
             
             _buildRegistrationButton(
               context: context,
-              label: 'Sou Aluno / Funcionário',
+              label: 'Sou Aluno / Funcionário de Escola',
               destination: const AlunoRegistrationScreen(),
-              color: const Color(0xFF99CC33), // Verde Limão
+              color: const Color(0xFF99CC33),
               delay: 300.ms,
+            ),
+            const SizedBox(height: 20),
+             _buildRegistrationButton(
+              context: context,
+              label: 'Sou Colaborador de Empresa',
+              destination: const ColaboradorEmpresaRegistrationScreen(),
+              color: const Color(0xFFFF6600), // Laranja
+              delay: 400.ms,
             ),
             const SizedBox(height: 20),
             _buildRegistrationButton(
               context: context,
               label: 'Sou Admin de Escola',
               destination: const AdmEscolaRegistrationScreen(),
-              color: const Color(0xFF9966CC), // Roxo
+              color: const Color(0xFF9966CC),
               delay: 500.ms,
+            ),
+            const SizedBox(height: 20),
+             _buildRegistrationButton(
+              context: context,
+              label: 'Sou Admin de Empresa',
+              destination: const AdminEmpresaRegistrationScreen(),
+              color: const Color(0xFFFF6600), // Laranja
+              delay: 600.ms,
             ),
             const SizedBox(height: 20),
             _buildRegistrationButton(
               context: context,
               label: 'Sou uma Instituição',
               destination: const InstituicaoRegistrationScreen(),
-              color: const Color(0xFFCC6699), // Rosa/Magenta
+              color: const Color(0xFFCC6699),
               delay: 700.ms,
-            ),
-            const SizedBox(height: 20),
-            
-            // --- ALTERAÇÃO APLICADA AQUI ---
-            _buildRegistrationButton(
-              context: context,
-              label: 'Sou uma Empresa Parceira', // Texto alterado
-              destination: const CompanyRegistrationScreen(),
-              color: const Color(0xFFFF6600), // Laranja
-              delay: 900.ms,
             ),
           ],
         ),
