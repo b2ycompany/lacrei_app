@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../login_screen.dart';
 
 class Company {
@@ -76,6 +75,7 @@ class _ColaboradorEmpresaRegistrationScreenState extends State<ColaboradorEmpres
 
       await user.updateDisplayName(_nameController.text.trim());
 
+      // --- ALTERAÇÃO PRINCIPAL AQUI ---
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
@@ -83,6 +83,7 @@ class _ColaboradorEmpresaRegistrationScreenState extends State<ColaboradorEmpres
         'companyId': _selectedCompany!.id,
         'companyName': _selectedCompany!.name,
         'createdAt': Timestamp.now(),
+        'accountStatus': 'approved', // 1. Adicionado status 'approved' para colaboradores
       });
 
       if (mounted) {
@@ -129,7 +130,7 @@ class _ColaboradorEmpresaRegistrationScreenState extends State<ColaboradorEmpres
               child: Padding(
                 padding: EdgeInsets.all(24.0),
                 child: Text(
-                  "Nenhuma empresa disponível para cadastro. Contate o administrador do sistema.",
+                  "Nenhuma empresa disponível para cadastro. Contate o administrador do sistema.", // Texto ajustado
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 16, color: Colors.white70),
                 ),

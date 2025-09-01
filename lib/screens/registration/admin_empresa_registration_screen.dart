@@ -84,6 +84,7 @@ class _AdminEmpresaRegistrationScreenState extends State<AdminEmpresaRegistratio
 
       await user.updateDisplayName(_responsibleNameController.text.trim());
 
+      // --- ALTERAÇÃO PRINCIPAL AQUI ---
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': _responsibleNameController.text.trim(),
         'phone': _responsiblePhoneController.text.trim(),
@@ -92,6 +93,7 @@ class _AdminEmpresaRegistrationScreenState extends State<AdminEmpresaRegistratio
         'companyId': _selectedCompany!.id,
         'companyName': _selectedCompany!.name,
         'createdAt': Timestamp.now(),
+        'accountStatus': 'pending', // 1. Adicionado o status inicial como pendente
       });
 
       await FirebaseFirestore.instance.collection('companies').doc(_selectedCompany!.id).update({
@@ -99,7 +101,8 @@ class _AdminEmpresaRegistrationScreenState extends State<AdminEmpresaRegistratio
       });
 
       if (mounted) {
-        _showSnackBar("Admin de Empresa cadastrado e vinculado com sucesso!", isError: false);
+        // 2. Mensagem de sucesso alterada para informar sobre a aprovação
+        _showSnackBar("Cadastro enviado! Sua conta será ativada após aprovação do administrador.", isError: false);
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
           (route) => false,

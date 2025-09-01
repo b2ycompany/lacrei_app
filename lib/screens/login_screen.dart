@@ -1,10 +1,8 @@
 // lib/screens/login_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-// CORREÇÃO: Alterado de 'package.' para 'package:'
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
@@ -15,8 +13,8 @@ import 'forgot_password_screen.dart';
 import 'institution/instituicao_dashboard_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'company/company_dashboard_screen.dart';
-// CORREÇÃO: O caminho relativo está correto agora que o ficheiro existe
-import 'collector/collector_dashboard_screen.dart'; 
+import 'collector/collector_dashboard_screen.dart';
+import 'sales/salesperson_dashboard_screen.dart'; // Import adicionado conforme instrução
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -96,39 +94,62 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
   
+  // --- FUNÇÃO DE NAVEGAÇÃO ATUALIZADA COM VERIFICAÇÃO DE STATUS ---
   Future<void> _navigateBasedOnUserRole(String uid) async {
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
     if (!mounted) return;
 
     if (userDoc.exists && userDoc.data() != null) {
-      final role = userDoc.data()!['role'];
+      final data = userDoc.data()!;
+      final role = data['role'];
+      // Pega o status da conta. Se não existir, considera como aprovado (para usuários antigos)
+      final status = data['accountStatus'];
+
+      // 1. VERIFICA O STATUS ANTES DE VERIFICAR O PERFIL (ROLE)
+      if (status == 'pending') {
+        _showError("Sua conta está pendente de aprovação pelo administrador.");
+        await _auth.signOut();
+        return; // Interrompe a execução
+      }
+      if (status == 'denied') {
+        _showError("Seu acesso foi negado. Por favor, entre em contato com o suporte.");
+        await _auth.signOut();
+        return; // Interrompe a execução
+      }
+      
+      // 2. Se o status for 'approved' ou nulo (usuário antigo), prossegue com o redirecionamento
       Widget destination;
       switch (role) {
-        case 'aluno':
-          destination = const StudentDashboardScreen();
+        case 'aluno': 
+          destination = const StudentDashboardScreen(); 
           break;
-        case 'adm_escola':
-          destination = const SchoolAdminDashboardScreen();
+        case 'adm_escola': 
+          destination = const SchoolAdminDashboardScreen(); 
           break;
-        case 'instituicao':
-          destination = const InstituicaoDashboardScreen();
+        case 'instituicao': 
+          destination = const InstituicaoDashboardScreen(); 
           break;
-        case 'administrador':
-        case 'super_admin':
-          destination = const AdminDashboardScreen();
+        case 'administrador': 
+        case 'super_admin': 
+          destination = const AdminDashboardScreen(); 
           break;
-        case 'company_admin':
-          destination = const CompanyDashboardScreen();
+        case 'company_admin': 
+          destination = const CompanyDashboardScreen(); 
           break;
-        case 'collector':
-          destination = const CollectorDashboardScreen();
+        case 'collector': 
+          destination = const CollectorDashboardScreen(); 
+          break;
+        case 'salesperson': 
+          destination = const SalespersonDashboardScreen(); 
           break;
         default:
           _showError("Perfil de usuário não reconhecido.");
+          await _auth.signOut();
           return;
       }
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => destination), (route) => false);
+
     } else {
       _showError("Não foi possível encontrar os dados do seu perfil.");
       await _auth.signOut();

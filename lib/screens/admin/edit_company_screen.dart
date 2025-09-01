@@ -39,10 +39,8 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
   SponsorshipPlan? _selectedPlan;
   String? _selectedStatus;
   
-  // --- NOVO: Variáveis para o Tipo de Empresa ---
   String? _selectedCompanyType;
   final List<String> _companyTypeOptions = ['Patrocinadora', 'Ponto de Coleta', 'Apoiadora', 'Parceira Logística'];
-  // --- FIM NOVO ---
 
   final List<String> _statusOptions = ['Prospect', 'Urna Instalada', 'Patrocinador Ativo', 'Inativo'];
   final _cnpjMaskFormatter = MaskTextInputFormatter(mask: '##.###.###/####-##', filter: {"#": RegExp(r'[0-9]')});
@@ -89,14 +87,10 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
         _nameController.text = data['companyName'] ?? '';
         _cnpjController.text = data['cnpj'] ?? '';
         _selectedStatus = data['sponsorshipStatus'];
-        
-        // --- NOVO: Carrega o tipo de empresa salvo ---
         _selectedCompanyType = data['companyType'];
-        // --- FIM NOVO ---
 
         final salespersonId = data['contactedBySalespersonId'];
         if (salespersonId != null) {
-          // Usando .where()..firstOrNull para evitar erros se o vendedor for deletado
           _selectedSalesperson = _salespeopleList.where((s) => s.id == salespersonId).firstOrNull;
         }
 
@@ -123,9 +117,7 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
       'contactedBySalespersonId': _selectedSalesperson?.id,
       'sponsorshipPlanId': _selectedPlan?.id,
       'sponsorshipStatus': _selectedStatus,
-      // --- NOVO: Salva o tipo de empresa no Firestore ---
       'companyType': _selectedCompanyType,
-      // --- FIM NOVO ---
       if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
     };
 
@@ -183,8 +175,6 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
                     validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
                   ),
                   const SizedBox(height: 16),
-
-                  // --- NOVO: Campo para selecionar o Tipo de Empresa ---
                   DropdownButtonFormField<String>(
                     value: _selectedCompanyType,
                     decoration: const InputDecoration(labelText: 'Tipo de Empresa'),
@@ -195,26 +185,47 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
                     validator: (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null,
                   ),
                   const SizedBox(height: 16),
-                  // --- FIM NOVO ---
-
-                  DropdownButtonFormField<Salesperson>(
+                  
+                  // --- CORREÇÃO APLICADA AQUI (VENDEDOR) ---
+                  DropdownButtonFormField<Salesperson?>(
                     value: _selectedSalesperson,
                     decoration: const InputDecoration(labelText: 'Vendedor Responsável'),
-                    items: _salespeopleList.map((salesperson) {
-                      return DropdownMenuItem(value: salesperson, child: Text(salesperson.name));
-                    }).toList(),
+                    items: [
+                      const DropdownMenuItem<Salesperson?>(
+                        value: null,
+                        child: Text("Nenhum / Deixar em branco", style: TextStyle(fontStyle: FontStyle.italic)),
+                      ),
+                      ..._salespeopleList.map((salesperson) {
+                        return DropdownMenuItem<Salesperson>(
+                          value: salesperson,
+                          child: Text(salesperson.name),
+                        );
+                      }).toList(),
+                    ],
                     onChanged: (value) => setState(() => _selectedSalesperson = value),
                   ),
                   const SizedBox(height: 16),
-                  DropdownButtonFormField<SponsorshipPlan>(
+
+                  // --- CORREÇÃO APLICADA AQUI (PLANO DE PATROCÍNIO) ---
+                  DropdownButtonFormField<SponsorshipPlan?>(
                     value: _selectedPlan,
                     decoration: const InputDecoration(labelText: 'Plano de Patrocínio'),
-                    items: _plansList.map((plan) {
-                      return DropdownMenuItem(value: plan, child: Text(plan.name));
-                    }).toList(),
+                    items: [
+                      const DropdownMenuItem<SponsorshipPlan?>(
+                        value: null,
+                        child: Text("Nenhum / Deixar em branco", style: TextStyle(fontStyle: FontStyle.italic)),
+                      ),
+                      ..._plansList.map((plan) {
+                        return DropdownMenuItem<SponsorshipPlan>(
+                          value: plan,
+                          child: Text(plan.name),
+                        );
+                      }).toList(),
+                    ],
                     onChanged: (value) => setState(() => _selectedPlan = value),
                   ),
                   const SizedBox(height: 16),
+                  
                   DropdownButtonFormField<String>(
                     value: _selectedStatus,
                     decoration: const InputDecoration(labelText: 'Status do Patrocínio'),

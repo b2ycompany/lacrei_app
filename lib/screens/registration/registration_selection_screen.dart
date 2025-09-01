@@ -5,7 +5,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'aluno_registration_screen.dart';
 import 'adm_escola_registration_screen.dart';
 import 'instituicao_registration_screen.dart';
-// --- NOVOS IMPORTS ---
 import 'admin_empresa_registration_screen.dart';
 import 'colaborador_empresa_registration_screen.dart';
 
@@ -32,12 +31,21 @@ class RegistrationSelectionScreen extends StatelessWidget {
             ).animate().fade(duration: 500.ms),
             const SizedBox(height: 40),
             
+            // --- ORDEM E CORES ATUALIZADAS PARA AGRUPAMENTO ---
             _buildRegistrationButton(
               context: context,
               label: 'Sou Aluno / Funcionário de Escola',
               destination: const AlunoRegistrationScreen(),
-              color: const Color(0xFF99CC33),
+              color: const Color(0xFF99CC33), // Verde
               delay: 300.ms,
+            ),
+            const SizedBox(height: 20),
+            _buildRegistrationButton(
+              context: context,
+              label: 'Sou Admin de Escola',
+              destination: const AdmEscolaRegistrationScreen(),
+              color: const Color(0xFF99CC33), // Verde
+              delay: 400.ms,
             ),
             const SizedBox(height: 20),
              _buildRegistrationButton(
@@ -45,14 +53,6 @@ class RegistrationSelectionScreen extends StatelessWidget {
               label: 'Sou Colaborador de Empresa',
               destination: const ColaboradorEmpresaRegistrationScreen(),
               color: const Color(0xFFFF6600), // Laranja
-              delay: 400.ms,
-            ),
-            const SizedBox(height: 20),
-            _buildRegistrationButton(
-              context: context,
-              label: 'Sou Admin de Escola',
-              destination: const AdmEscolaRegistrationScreen(),
-              color: const Color(0xFF9966CC),
               delay: 500.ms,
             ),
             const SizedBox(height: 20),
@@ -68,7 +68,7 @@ class RegistrationSelectionScreen extends StatelessWidget {
               context: context,
               label: 'Sou uma Instituição',
               destination: const InstituicaoRegistrationScreen(),
-              color: const Color(0xFFCC6699),
+              color: const Color(0xFFCC6699), // Rosa/Magenta
               delay: 700.ms,
             ),
           ],

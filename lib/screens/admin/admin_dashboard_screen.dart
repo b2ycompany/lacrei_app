@@ -19,6 +19,7 @@ import 'sponsorship_plans_screen.dart';
 import 'company_management_screen.dart';
 import 'institution_management_screen.dart';
 import 'sales_report_screen.dart';
+import 'access_approval_screen.dart'; // 1. Import da nova tela
 
 class SchoolParticipationReport {
   final String schoolName;
@@ -154,8 +155,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               children: [
                 _buildMetricCard('schools', 'Escolas', Colors.orangeAccent),
                 const SizedBox(width: 16),
-                // --- ALTERAÇÃO APLICADA AQUI ---
-                _buildMetricCard('companies', 'Empresas Participantes', Colors.lightBlueAccent), // Texto alterado
+                _buildMetricCard('companies', 'Empresas Participantes', Colors.lightBlueAccent),
                 const SizedBox(width: 16),
                 _buildMetricCard('users', 'Usuários', Colors.purpleAccent),
               ],
@@ -197,6 +197,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               mainAxisSpacing: 16,
               childAspectRatio: 1.2,
               children: [
+                  // --- 2. NOVO CARD DE APROVAÇÕES ADICIONADO ---
+                  _buildApprovalCard(context),
+                  
                   _buildDashboardCard(
                     context: context,
                     icon: Icons.bar_chart,
@@ -261,6 +264,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+  
+  // --- 3. NOVO WIDGET ESPECÍFICO PARA O CARD DE APROVAÇÃO ---
+  Widget _buildApprovalCard(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').where('accountStatus', isEqualTo: 'pending').snapshots(),
+      builder: (context, snapshot) {
+        final pendingCount = snapshot.data?.docs.length ?? 0;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            _buildDashboardCard(
+              context: context,
+              icon: Icons.how_to_reg,
+              label: "Aprovações de Acesso",
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AccessApprovalScreen())),
+              isHighlighted: pendingCount > 0, // Destaque se houver pendências
+            ),
+            if (pendingCount > 0)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    pendingCount.toString(),
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
