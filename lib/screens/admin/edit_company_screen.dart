@@ -200,7 +200,7 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
                           value: salesperson,
                           child: Text(salesperson.name),
                         );
-                      }).toList(),
+                      }),
                     ],
                     onChanged: (value) => setState(() => _selectedSalesperson = value),
                   ),
@@ -220,7 +220,7 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
                           value: plan,
                           child: Text(plan.name),
                         );
-                      }).toList(),
+                      }),
                     ],
                     onChanged: (value) => setState(() => _selectedPlan = value),
                   ),

@@ -7,7 +7,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../login_screen.dart';
 
-// Modelo para simplificar a manipulação dos dados da escola
 class School {
   final String id;
   final String name;
@@ -25,9 +24,7 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
   bool _isLoading = false;
   final _formKey = GlobalKey<FormState>();
 
-  // Lista de escolas que virão do Firestore
   List<School> _schoolsList = [];
-  // Escola que o usuário selecionou no dropdown
   School? _selectedSchool;
 
   final _responsibleNameController = TextEditingController();
@@ -54,12 +51,10 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
     super.dispose();
   }
 
-  // Função para buscar as escolas cadastradas pelo Super Admin
   Future<void> _fetchSchools() async {
     setState(() => _isLoading = true);
     try {
       final snapshot = await FirebaseFirestore.instance.collection('schools').orderBy('schoolName').get();
-      // Mapeia os documentos para a nossa classe 'School'
       final schools = snapshot.docs.map((doc) => School(id: doc.id, name: doc.data()['schoolName'] ?? 'Nome não encontrado')).toList();
       if (mounted) {
         setState(() => _schoolsList = schools);
@@ -73,7 +68,6 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
     }
   }
 
-  // Lógica de registro TOTALMENTE REFEITA
   Future<void> _registerAdmEscola() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     
@@ -81,7 +75,6 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
     User? user; 
 
     try {
-      // 1. Cria o usuário na autenticação do Firebase
       final UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -89,34 +82,33 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
       user = userCredential.user;
       if (user == null) throw Exception("Falha ao criar usuário na autenticação.");
 
-      // 2. Atualiza o nome de exibição do usuário
       await user.updateDisplayName(_responsibleNameController.text.trim());
 
-      // 3. Cria o documento do usuário na coleção 'users', vinculando-o à escola selecionada
+      // --- ALTERAÇÕES APLICADAS AQUI ---
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': _responsibleNameController.text.trim(),
         'phone': _responsiblePhoneController.text.trim(),
         'email': _emailController.text.trim(),
         'role': 'adm_escola', 
-        'schoolId': _selectedSchool!.id, // ID da escola selecionada
-        'schoolName': _selectedSchool!.name, // Nome da escola selecionada
+        'schoolId': _selectedSchool!.id,
+        'schoolName': _selectedSchool!.name,
         'createdAt': Timestamp.now(),
+        'accountStatus': 'pending', // 1. Adicionado o status inicial como pendente
       });
 
-      // BÔNUS: Atualiza o documento da escola para incluir o ID do admin
       await FirebaseFirestore.instance.collection('schools').doc(_selectedSchool!.id).update({
         'adminUid': user.uid,
       });
 
       if (mounted) {
-        _showSnackBar("Administrador cadastrado e vinculado à escola com sucesso!", isError: false);
+        // 2. Mensagem de sucesso alterada para informar sobre a aprovação
+        _showSnackBar("Cadastro enviado! Sua conta será ativada após aprovação do administrador.", isError: false);
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginScreen()),
           (route) => false,
         );
       }
     } catch (e) {
-      // Se algo der errado, apaga o usuário da autenticação para liberar o email
       if (user != null) {
         await user.delete();
       }
@@ -153,9 +145,9 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
           if (_schoolsList.isEmpty && !_isLoading)
             const Center(
               child: Padding(
-                padding: EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(24.0),
                 child: Text(
-                  "Nenhuma escola disponível para cadastro no momento. Por favor, entre em contato com o administrador do sistema.",
+                  "Nenhuma escola disponível para cadastro. Contate o administrador.",
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 16, color: Colors.white70),
                 ),
@@ -177,7 +169,6 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
                       ),
                       const SizedBox(height: 32),
                       
-                      // --- CAMPO PRINCIPAL: SELEÇÃO DA ESCOLA ---
                       DropdownButtonFormField<School>(
                         decoration: _buildInputDecoration('Selecione sua Escola/Faculdade'),
                         value: _selectedSchool,
