@@ -4,6 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
+// Modelo para o dropdown de instituições
+class Institution {
+  final String id;
+  final String name;
+  Institution({required this.id, required this.name});
+}
+
 class EditSchoolScreen extends StatefulWidget {
   final String? schoolId;
 
@@ -27,16 +34,34 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
   bool _isLoading = true;
   bool get _isEditing => widget.schoolId != null;
 
+  // --- NOVAS VARIÁVEIS PARA O DROPDOWN DE INSTITUIÇÕES ---
+  List<Institution> _institutionsList = [];
+  Institution? _selectedInstitution;
+
   final _phoneMaskFormatter = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _cepMaskFormatter = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
 
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    await _fetchInstitutions();
     if (_isEditing) {
-      _loadSchoolData();
-    } else {
-      setState(() => _isLoading = false);
+      await _loadSchoolData();
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  // --- NOVA FUNÇÃO PARA BUSCAR AS INSTITUIÇÕES ---
+  Future<void> _fetchInstitutions() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('institutions').orderBy('institutionName').get();
+      _institutionsList = snapshot.docs.map((doc) => Institution(id: doc.id, name: doc.data()['institutionName'] ?? 'Nome não encontrado')).toList();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar instituições: $e')));
     }
   }
 
@@ -53,17 +78,20 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
         _addressDistrictController.text = data['schoolDistrict'] ?? '';
         _addressCityController.text = data['city'] ?? '';
         _addressStateController.text = data['schoolState'] ?? '';
+
+        // Carrega a instituição vinculada, se houver
+        final institutionId = data['institutionId'];
+        if (institutionId != null) {
+          _selectedInstitution = _institutionsList.where((i) => i.id == institutionId).firstOrNull;
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _saveSchool() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     final schoolData = {
@@ -74,6 +102,8 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
       'schoolDistrict': _addressDistrictController.text.trim(),
       'city': _addressCityController.text.trim(),
       'schoolState': _addressStateController.text.trim(),
+      // --- NOVO CAMPO SALVO NO FIRESTORE ---
+      'institutionId': _selectedInstitution?.id,
       if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
     };
 
@@ -85,9 +115,7 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
       }
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Salvo com sucesso!'), backgroundColor: Colors.green)
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Salvo com sucesso!'), backgroundColor: Colors.green));
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -103,12 +131,7 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Editar Escola/Faculdade' : 'Adicionar Escola/Faculdade'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _isLoading ? null : _saveSchool,
-          ),
-        ],
+        actions: [ IconButton(icon: const Icon(Icons.save), onPressed: _isLoading ? null : _saveSchool) ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -117,51 +140,34 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Nome da Escola/Faculdade'),
-                    validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
+                  // --- NOVO CAMPO DE SELEÇÃO DE INSTITUIÇÃO ---
+                  DropdownButtonFormField<Institution?>(
+                    value: _selectedInstitution,
+                    decoration: const InputDecoration(labelText: 'Instituição Responsável (Opcional)'),
+                    items: [
+                      const DropdownMenuItem<Institution?>(value: null, child: Text("Nenhuma", style: TextStyle(fontStyle: FontStyle.italic))),
+                      ..._institutionsList.map((institution) {
+                        return DropdownMenuItem<Institution>(value: institution, child: Text(institution.name));
+                      }),
+                    ],
+                    onChanged: (value) => setState(() => _selectedInstitution = value),
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _phoneController,
-                    decoration: const InputDecoration(labelText: 'Telefone'),
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [_phoneMaskFormatter],
-                  ),
+                  TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nome da Escola/Faculdade'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _cepController,
-                    decoration: const InputDecoration(labelText: 'CEP'),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [_cepMaskFormatter],
-                  ),
+                  TextFormField(controller: _phoneController, decoration: const InputDecoration(labelText: 'Telefone'), keyboardType: TextInputType.phone, inputFormatters: [_phoneMaskFormatter]),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressController,
-                    decoration: const InputDecoration(labelText: 'Endereço (Rua)'),
-                  ),
-                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressNumberController,
-                    decoration: const InputDecoration(labelText: 'Número'),
-                    keyboardType: TextInputType.number,
-                  ),
+                  TextFormField(controller: _cepController, decoration: const InputDecoration(labelText: 'CEP'), keyboardType: TextInputType.number, inputFormatters: [_cepMaskFormatter]),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressDistrictController,
-                    decoration: const InputDecoration(labelText: 'Bairro'),
-                  ),
+                  TextFormField(controller: _addressController, decoration: const InputDecoration(labelText: 'Endereço (Rua)')),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressCityController,
-                    decoration: const InputDecoration(labelText: 'Cidade'),
-                  ),
+                  TextFormField(controller: _addressNumberController, decoration: const InputDecoration(labelText: 'Número'), keyboardType: TextInputType.number),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _addressStateController,
-                    decoration: const InputDecoration(labelText: 'Estado'),
-                  ),
+                  TextFormField(controller: _addressDistrictController, decoration: const InputDecoration(labelText: 'Bairro')),
+                  const SizedBox(height: 16),
+                  TextFormField(controller: _addressCityController, decoration: const InputDecoration(labelText: 'Cidade')),
+                  const SizedBox(height: 16),
+                  TextFormField(controller: _addressStateController, decoration: const InputDecoration(labelText: 'Estado')),
                 ],
               ),
             ),

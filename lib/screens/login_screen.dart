@@ -14,7 +14,9 @@ import 'institution/instituicao_dashboard_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'company/company_dashboard_screen.dart';
 import 'collector/collector_dashboard_screen.dart';
-import 'sales/salesperson_dashboard_screen.dart'; // Import adicionado conforme instrução
+import 'sales/salesperson_dashboard_screen.dart'; 
+// --- NOVO IMPORT ---
+import 'collaborator/colaborador_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -94,7 +96,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
   
-  // --- FUNÇÃO DE NAVEGAÇÃO ATUALIZADA COM VERIFICAÇÃO DE STATUS ---
   Future<void> _navigateBasedOnUserRole(String uid) async {
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
     if (!mounted) return;
@@ -102,46 +103,35 @@ class _LoginScreenState extends State<LoginScreen> {
     if (userDoc.exists && userDoc.data() != null) {
       final data = userDoc.data()!;
       final role = data['role'];
-      // Pega o status da conta. Se não existir, considera como aprovado (para usuários antigos)
       final status = data['accountStatus'];
 
-      // 1. VERIFICA O STATUS ANTES DE VERIFICAR O PERFIL (ROLE)
       if (status == 'pending') {
         _showError("Sua conta está pendente de aprovação pelo administrador.");
         await _auth.signOut();
-        return; // Interrompe a execução
+        return;
       }
       if (status == 'denied') {
         _showError("Seu acesso foi negado. Por favor, entre em contato com o suporte.");
         await _auth.signOut();
-        return; // Interrompe a execução
+        return;
       }
       
-      // 2. Se o status for 'approved' ou nulo (usuário antigo), prossegue com o redirecionamento
       Widget destination;
       switch (role) {
-        case 'aluno': 
-          destination = const StudentDashboardScreen(); 
-          break;
-        case 'adm_escola': 
-          destination = const SchoolAdminDashboardScreen(); 
-          break;
-        case 'instituicao': 
-          destination = const InstituicaoDashboardScreen(); 
-          break;
+        case 'aluno': destination = const StudentDashboardScreen(); break;
+        case 'adm_escola': destination = const SchoolAdminDashboardScreen(); break;
+        case 'instituicao': destination = const InstituicaoDashboardScreen(); break;
         case 'administrador': 
-        case 'super_admin': 
-          destination = const AdminDashboardScreen(); 
+        case 'super_admin': destination = const AdminDashboardScreen(); break;
+        case 'company_admin': destination = const CompanyDashboardScreen(); break;
+        case 'collector': destination = const CollectorDashboardScreen(); break;
+        case 'salesperson': destination = const SalespersonDashboardScreen(); break;
+        
+        // --- CORREÇÃO APLICADA AQUI ---
+        case 'colaborador_empresa': 
+          destination = const ColaboradorDashboardScreen(); 
           break;
-        case 'company_admin': 
-          destination = const CompanyDashboardScreen(); 
-          break;
-        case 'collector': 
-          destination = const CollectorDashboardScreen(); 
-          break;
-        case 'salesperson': 
-          destination = const SalespersonDashboardScreen(); 
-          break;
+
         default:
           _showError("Perfil de usuário não reconhecido.");
           await _auth.signOut();

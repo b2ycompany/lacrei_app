@@ -4,6 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
+// Modelo para o dropdown de instituições (reutilizado)
+class Institution {
+  final String id;
+  final String name;
+  Institution({required this.id, required this.name});
+}
+
 class Salesperson {
   final String id;
   final String name;
@@ -35,13 +42,16 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
 
   List<Salesperson> _salespeopleList = [];
   List<SponsorshipPlan> _plansList = [];
+  // --- NOVAS VARIÁVEIS PARA O DROPDOWN DE INSTITUIÇÕES ---
+  List<Institution> _institutionsList = [];
+  Institution? _selectedInstitution;
+  
   Salesperson? _selectedSalesperson;
   SponsorshipPlan? _selectedPlan;
   String? _selectedStatus;
   
   String? _selectedCompanyType;
   final List<String> _companyTypeOptions = ['Patrocinadora', 'Ponto de Coleta', 'Apoiadora', 'Parceira Logística'];
-
   final List<String> _statusOptions = ['Prospect', 'Urna Instalada', 'Patrocinador Ativo', 'Inativo'];
   final _cnpjMaskFormatter = MaskTextInputFormatter(mask: '##.###.###/####-##', filter: {"#": RegExp(r'[0-9]')});
 
@@ -56,26 +66,25 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
     if (_isEditing) {
       await _loadCompanyData();
     }
-    if(mounted) {
-      setState(() => _isLoading = false);
-    }
+    if(mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _loadDropdownData() async {
     try {
+      // Busca Vendedores
       final salespeopleSnapshot = await FirebaseFirestore.instance.collection('salespeople').get();
-      _salespeopleList = salespeopleSnapshot.docs.map((doc) {
-        return Salesperson(id: doc.id, name: doc.data()['name'] ?? 'Nome não encontrado');
-      }).toList();
+      _salespeopleList = salespeopleSnapshot.docs.map((doc) => Salesperson(id: doc.id, name: doc.data()['name'] ?? '')).toList();
 
+      // Busca Planos
       final plansSnapshot = await FirebaseFirestore.instance.collection('sponsorship_plans').get();
-      _plansList = plansSnapshot.docs.map((doc) {
-        return SponsorshipPlan(id: doc.id, name: doc.data()['planName'] ?? 'Nome não encontrado');
-      }).toList();
+      _plansList = plansSnapshot.docs.map((doc) => SponsorshipPlan(id: doc.id, name: doc.data()['planName'] ?? '')).toList();
+
+      // --- NOVA BUSCA DE INSTITUIÇÕES ---
+      final institutionsSnapshot = await FirebaseFirestore.instance.collection('institutions').get();
+      _institutionsList = institutionsSnapshot.docs.map((doc) => Institution(id: doc.id, name: doc.data()['institutionName'] ?? '')).toList();
+
     } catch (e) {
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar vendedores/planos: $e')));
-      }
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados de seleção: $e')));
     }
   }
 
@@ -89,6 +98,11 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
         _selectedStatus = data['sponsorshipStatus'];
         _selectedCompanyType = data['companyType'];
 
+        final institutionId = data['institutionId'];
+        if (institutionId != null) {
+          _selectedInstitution = _institutionsList.where((i) => i.id == institutionId).firstOrNull;
+        }
+
         final salespersonId = data['contactedBySalespersonId'];
         if (salespersonId != null) {
           _selectedSalesperson = _salespeopleList.where((s) => s.id == salespersonId).firstOrNull;
@@ -100,15 +114,12 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
         }
       }
     } catch (e) {
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados da empresa: $e')));
-      }
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados da empresa: $e')));
     }
   }
 
   Future<void> _saveCompany() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     final companyData = {
@@ -118,6 +129,8 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
       'sponsorshipPlanId': _selectedPlan?.id,
       'sponsorshipStatus': _selectedStatus,
       'companyType': _selectedCompanyType,
+      // --- NOVO CAMPO SALVO NO FIRESTORE ---
+      'institutionId': _selectedInstitution?.id,
       if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
     };
 
@@ -129,9 +142,7 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
       }
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Empresa salva com sucesso!'), backgroundColor: Colors.green)
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Empresa salva com sucesso!'), backgroundColor: Colors.green));
         Navigator.of(context).pop();
       }
     } catch (e) {
@@ -147,12 +158,7 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Editar Empresa' : 'Adicionar Empresa'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _isLoading ? null : _saveCompany,
-          ),
-        ],
+        actions: [ IconButton(icon: const Icon(Icons.save), onPressed: _isLoading ? null : _saveCompany) ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -161,80 +167,30 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Nome da Empresa'),
-                    validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _cnpjController,
-                    decoration: const InputDecoration(labelText: 'CNPJ'),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [_cnpjMaskFormatter],
-                    validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: _selectedCompanyType,
-                    decoration: const InputDecoration(labelText: 'Tipo de Empresa'),
-                    items: _companyTypeOptions.map((type) {
-                      return DropdownMenuItem(value: type, child: Text(type));
-                    }).toList(),
-                    onChanged: (value) => setState(() => _selectedCompanyType = value),
-                    validator: (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // --- CORREÇÃO APLICADA AQUI (VENDEDOR) ---
-                  DropdownButtonFormField<Salesperson?>(
-                    value: _selectedSalesperson,
-                    decoration: const InputDecoration(labelText: 'Vendedor Responsável'),
+                   // --- NOVO CAMPO DE SELEÇÃO DE INSTITUIÇÃO ---
+                  DropdownButtonFormField<Institution?>(
+                    value: _selectedInstitution,
+                    decoration: const InputDecoration(labelText: 'Instituição Responsável (Opcional)'),
                     items: [
-                      const DropdownMenuItem<Salesperson?>(
-                        value: null,
-                        child: Text("Nenhum / Deixar em branco", style: TextStyle(fontStyle: FontStyle.italic)),
-                      ),
-                      ..._salespeopleList.map((salesperson) {
-                        return DropdownMenuItem<Salesperson>(
-                          value: salesperson,
-                          child: Text(salesperson.name),
-                        );
+                      const DropdownMenuItem<Institution?>(value: null, child: Text("Nenhuma", style: TextStyle(fontStyle: FontStyle.italic))),
+                      ..._institutionsList.map((institution) {
+                        return DropdownMenuItem<Institution>(value: institution, child: Text(institution.name));
                       }),
                     ],
-                    onChanged: (value) => setState(() => _selectedSalesperson = value),
+                    onChanged: (value) => setState(() => _selectedInstitution = value),
                   ),
                   const SizedBox(height: 16),
-
-                  // --- CORREÇÃO APLICADA AQUI (PLANO DE PATROCÍNIO) ---
-                  DropdownButtonFormField<SponsorshipPlan?>(
-                    value: _selectedPlan,
-                    decoration: const InputDecoration(labelText: 'Plano de Patrocínio'),
-                    items: [
-                      const DropdownMenuItem<SponsorshipPlan?>(
-                        value: null,
-                        child: Text("Nenhum / Deixar em branco", style: TextStyle(fontStyle: FontStyle.italic)),
-                      ),
-                      ..._plansList.map((plan) {
-                        return DropdownMenuItem<SponsorshipPlan>(
-                          value: plan,
-                          child: Text(plan.name),
-                        );
-                      }),
-                    ],
-                    onChanged: (value) => setState(() => _selectedPlan = value),
-                  ),
+                  TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nome da Empresa'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
                   const SizedBox(height: 16),
-                  
-                  DropdownButtonFormField<String>(
-                    value: _selectedStatus,
-                    decoration: const InputDecoration(labelText: 'Status do Patrocínio'),
-                    items: _statusOptions.map((status) {
-                      return DropdownMenuItem(value: status, child: Text(status));
-                    }).toList(),
-                    onChanged: (value) => setState(() => _selectedStatus = value),
-                    validator: (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null,
-                  ),
+                  TextFormField(controller: _cnpjController, decoration: const InputDecoration(labelText: 'CNPJ'), keyboardType: TextInputType.number, inputFormatters: [_cnpjMaskFormatter], validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(value: _selectedCompanyType, decoration: const InputDecoration(labelText: 'Tipo de Empresa'), items: _companyTypeOptions.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(), onChanged: (value) => setState(() => _selectedCompanyType = value), validator: (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<Salesperson?>(value: _selectedSalesperson, decoration: const InputDecoration(labelText: 'Vendedor Responsável'), items: [const DropdownMenuItem<Salesperson?>(value: null, child: Text("Nenhum / Deixar em branco", style: TextStyle(fontStyle: FontStyle.italic))), ..._salespeopleList.map((salesperson) => DropdownMenuItem<Salesperson>(value: salesperson, child: Text(salesperson.name)))], onChanged: (value) => setState(() => _selectedSalesperson = value)),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<SponsorshipPlan?>(value: _selectedPlan, decoration: const InputDecoration(labelText: 'Plano de Patrocínio'), items: [const DropdownMenuItem<SponsorshipPlan?>(value: null, child: Text("Nenhum / Deixar em branco", style: TextStyle(fontStyle: FontStyle.italic))), ..._plansList.map((plan) => DropdownMenuItem<SponsorshipPlan>(value: plan, child: Text(plan.name)))], onChanged: (value) => setState(() => _selectedPlan = value)),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(value: _selectedStatus, decoration: const InputDecoration(labelText: 'Status do Patrocínio'), items: _statusOptions.map((status) => DropdownMenuItem(value: status, child: Text(status))).toList(), onChanged: (value) => setState(() => _selectedStatus = value), validator: (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null),
                 ],
               ),
             ),

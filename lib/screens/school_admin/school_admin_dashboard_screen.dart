@@ -31,12 +31,14 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
       if (mounted) {
         setState(() {
           _schoolId = userDoc.data()?['schoolId'];
+          _isLoading = false;
         });
       }
     } catch (e) {
-      _showSnackBar("Erro ao carregar dados do administrador.", isError: true);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if(mounted) {
+        setState(() => _isLoading = false);
+        _showSnackBar("Erro ao carregar dados do administrador.", isError: true);
+      }
     }
   }
 
@@ -68,7 +70,6 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    // ALTERADO: Comprimento do TabController para 5 para incluir o novo painel
     return DefaultTabController(
       length: 5, 
       child: Scaffold(
@@ -81,15 +82,41 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
               onPressed: _logout,
             ),
           ],
-          // ALTERADO: Adicionada a nova aba "Painel"
-          bottom: const TabBar(
+          bottom: TabBar(
             isScrollable: true,
             tabs: [
-              Tab(icon: Icon(Icons.dashboard), text: "Painel"),
-              Tab(icon: Icon(Icons.campaign), text: "Campanhas"),
-              Tab(icon: Icon(Icons.add_task), text: "Registrar Coleta"),
-              Tab(icon: Icon(Icons.inventory_2_outlined), text: "Urnas"),
-              Tab(icon: Icon(Icons.person_add_alt_1), text: "Solicitações"),
+              const Tab(icon: Icon(Icons.dashboard), text: "Painel"),
+              const Tab(icon: Icon(Icons.campaign), text: "Campanhas"),
+              const Tab(icon: Icon(Icons.add_task), text: "Registrar Coleta"),
+              const Tab(icon: Icon(Icons.inventory_2_outlined), text: "Urnas"),
+              // ABA DE SOLICITAÇÕES COM BADGE DE NOTIFICAÇÃO
+              Tab(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: _schoolId == null ? null : FirebaseFirestore.instance.collection('schools').doc(_schoolId!).collection('pendingRequests').snapshots(),
+                  builder: (context, snapshot) {
+                    final count = snapshot.data?.docs.length ?? 0;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [ Icon(Icons.person_add_alt_1), SizedBox(width: 8), Text("Solicitações") ],
+                        ),
+                        if (count > 0)
+                          Positioned(
+                            top: -8, right: -20,
+                            child: Container(
+                              padding: const EdgeInsets.all(5),
+                              decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+                              child: Text(count.toString(), style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                          )
+                      ],
+                    );
+                  }
+                ),
+              ),
             ],
           ),
         ),
@@ -99,7 +126,6 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
                 ? const Center(child: Text("Administrador não vinculado a uma escola."))
                 : TabBarView(
                     children: [
-                      // NOVO: Adicionado o widget do painel de estatísticas
                       SchoolDashboardView(schoolId: _schoolId!),
                       CampaignApprovalView(schoolId: _schoolId!),
                       RegisterCollectionView(schoolId: _schoolId!),
@@ -112,7 +138,7 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
   }
 }
 
-// NOVO WIDGET PARA O PAINEL PRINCIPAL DO ADMIN DA ESCOLA
+// WIDGET PARA O PAINEL PRINCIPAL DO ADMIN DA ESCOLA
 class SchoolDashboardView extends StatelessWidget {
   final String schoolId;
   const SchoolDashboardView({super.key, required this.schoolId});
@@ -186,7 +212,7 @@ class SchoolDashboardView extends StatelessWidget {
 }
 
 
-// Widget para exibir e gerir o status da urna
+// WIDGET PARA EXIBIR E GERIR O STATUS DA URNA
 class UrnStatusView extends StatelessWidget {
   final String assignedToId;
   const UrnStatusView({super.key, required this.assignedToId});
@@ -276,6 +302,7 @@ class UrnStatusView extends StatelessWidget {
   }
 }
 
+// WIDGET PARA VISUALIZAR CAMPANHAS
 class CampaignApprovalView extends StatelessWidget {
   final String schoolId;
   const CampaignApprovalView({super.key, required this.schoolId});
@@ -332,6 +359,8 @@ class CampaignApprovalView extends StatelessWidget {
     );
   }
 }
+
+// WIDGET PARA REGISTRAR COLETA
 class RegisterCollectionView extends StatefulWidget {
   final String schoolId;
   const RegisterCollectionView({super.key, required this.schoolId});
@@ -412,25 +441,33 @@ class _RegisterCollectionViewState extends State<RegisterCollectionView> {
     );
   }
 }
+
+// WIDGET PARA APROVAR/REJEITAR ALUNOS PENDENTES
 class PendingRequestsView extends StatelessWidget {
   final String schoolId;
   const PendingRequestsView({super.key, required this.schoolId});
-  Future<void> _approveStudent(String studentUid) async {
-    final studentRef = FirebaseFirestore.instance.collection('users').doc(studentUid);
-    final requestRef = FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('pendingRequests').doc(studentUid);
-    final batch = FirebaseFirestore.instance.batch();
-    batch.update(studentRef, {'schoolLinkStatus': 'approved'});
-    batch.delete(requestRef);
-    await batch.commit();
+
+  Future<void> _updateStudentStatus(BuildContext context, String studentUid, String status) async {
+    try {
+      final studentRef = FirebaseFirestore.instance.collection('users').doc(studentUid);
+      final requestRef = FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('pendingRequests').doc(studentUid);
+      final batch = FirebaseFirestore.instance.batch();
+
+      batch.update(studentRef, {'schoolLinkStatus': status});
+      batch.delete(requestRef);
+
+      await batch.commit();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Aluno ${status == 'approved' ? 'aprovado' : 'rejeitado'} com sucesso!"), backgroundColor: Colors.green),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Erro ao processar solicitação: ${e.toString()}"), backgroundColor: Colors.red),
+      );
+    }
   }
-  Future<void> _rejectStudent(String studentUid) async {
-    final studentRef = FirebaseFirestore.instance.collection('users').doc(studentUid);
-    final requestRef = FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('pendingRequests').doc(studentUid);
-    final batch = FirebaseFirestore.instance.batch();
-    batch.update(studentRef, {'schoolLinkStatus': 'rejected'});
-    batch.delete(requestRef);
-    await batch.commit();
-  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
@@ -439,6 +476,7 @@ class PendingRequestsView extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator()); }
         if (snapshot.hasError) { return const Center(child: Text("Erro ao carregar solicitações.")); }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) { return const Center(child: Text("Nenhuma solicitação pendente no momento.")); }
+        
         final requests = snapshot.data!.docs;
         return ListView.builder(
           itemCount: requests.length,
@@ -448,13 +486,16 @@ class PendingRequestsView extends StatelessWidget {
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: ListTile(
-                leading: CircleAvatar(backgroundImage: requestData['studentImageUrl'] != null ? NetworkImage(requestData['studentImageUrl']) : null, child: requestData['studentImageUrl'] == null ? const Icon(Icons.person) : null),
+                leading: CircleAvatar(
+                  backgroundImage: requestData['studentImageUrl'] != null ? NetworkImage(requestData['studentImageUrl']) : null,
+                  child: requestData['studentImageUrl'] == null ? const Icon(Icons.person) : null
+                ),
                 title: Text(requestData['studentName'] ?? 'Nome não informado'),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(icon: const Icon(Icons.check_circle, color: Colors.green), onPressed: () => _approveStudent(studentUid), tooltip: 'Aprovar'),
-                    IconButton(icon: const Icon(Icons.cancel, color: Colors.red), onPressed: () => _rejectStudent(studentUid), tooltip: 'Rejeitar'),
+                    IconButton(icon: const Icon(Icons.check_circle, color: Colors.green), onPressed: () => _updateStudentStatus(context, studentUid, 'approved'), tooltip: 'Aprovar'),
+                    IconButton(icon: const Icon(Icons.cancel, color: Colors.red), onPressed: () => _updateStudentStatus(context, studentUid, 'rejected'), tooltip: 'Rejeitar'),
                   ],
                 ),
               ),

@@ -145,7 +145,7 @@ class _AdmEscolaRegistrationScreenState extends State<AdmEscolaRegistrationScree
           if (_schoolsList.isEmpty && !_isLoading)
             const Center(
               child: Padding(
-                padding: const EdgeInsets.all(24.0),
+                padding: EdgeInsets.all(24.0),
                 child: Text(
                   "Nenhuma escola disponível para cadastro. Contate o administrador.",
                   textAlign: TextAlign.center,
