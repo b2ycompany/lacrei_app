@@ -34,7 +34,7 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
   bool _isLoading = true;
   bool get _isEditing => widget.schoolId != null;
 
-  // --- NOVAS VARIÁVEIS PARA O DROPDOWN DE INSTITUIÇÕES ---
+  // Variáveis para o dropdown de instituições
   List<Institution> _institutionsList = [];
   Institution? _selectedInstitution;
 
@@ -55,7 +55,6 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  // --- NOVA FUNÇÃO PARA BUSCAR AS INSTITUIÇÕES ---
   Future<void> _fetchInstitutions() async {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('institutions').orderBy('institutionName').get();
@@ -79,14 +78,13 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
         _addressCityController.text = data['city'] ?? '';
         _addressStateController.text = data['schoolState'] ?? '';
 
-        // Carrega a instituição vinculada, se houver
         final institutionId = data['institutionId'];
         if (institutionId != null) {
           _selectedInstitution = _institutionsList.where((i) => i.id == institutionId).firstOrNull;
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
     }
   }
 
@@ -102,8 +100,7 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
       'schoolDistrict': _addressDistrictController.text.trim(),
       'city': _addressCityController.text.trim(),
       'schoolState': _addressStateController.text.trim(),
-      // --- NOVO CAMPO SALVO NO FIRESTORE ---
-      'institutionId': _selectedInstitution?.id,
+      'institutionId': _selectedInstitution?.id, // Salva o ID da instituição
       if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
     };
 
@@ -140,18 +137,24 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                  // --- NOVO CAMPO DE SELEÇÃO DE INSTITUIÇÃO ---
-                  DropdownButtonFormField<Institution?>(
-                    value: _selectedInstitution,
-                    decoration: const InputDecoration(labelText: 'Instituição Responsável (Opcional)'),
-                    items: [
-                      const DropdownMenuItem<Institution?>(value: null, child: Text("Nenhuma", style: TextStyle(fontStyle: FontStyle.italic))),
-                      ..._institutionsList.map((institution) {
-                        return DropdownMenuItem<Institution>(value: institution, child: Text(institution.name));
-                      }),
-                    ],
-                    onChanged: (value) => setState(() => _selectedInstitution = value),
-                  ),
+                  // --- CAMPO DE SELEÇÃO DE INSTITUIÇÃO ADICIONADO AQUI ---
+                  if (_institutionsList.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 16.0),
+                      child: Text("Nenhuma instituição cadastrada para vincular.", style: TextStyle(color: Colors.amber)),
+                    )
+                  else
+                    DropdownButtonFormField<Institution?>(
+                      value: _selectedInstitution,
+                      decoration: const InputDecoration(labelText: 'Instituição Responsável (Opcional)'),
+                      items: [
+                        const DropdownMenuItem<Institution?>(value: null, child: Text("Nenhuma", style: TextStyle(fontStyle: FontStyle.italic))),
+                        ..._institutionsList.map((institution) {
+                          return DropdownMenuItem<Institution>(value: institution, child: Text(institution.name));
+                        }),
+                      ],
+                      onChanged: (value) => setState(() => _selectedInstitution = value),
+                    ),
                   const SizedBox(height: 16),
                   TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nome da Escola/Faculdade'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
                   const SizedBox(height: 16),

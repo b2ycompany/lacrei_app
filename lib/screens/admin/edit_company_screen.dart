@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
-// Modelo para o dropdown de instituições (reutilizado)
 class Institution {
   final String id;
   final String name;
@@ -42,15 +41,14 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
 
   List<Salesperson> _salespeopleList = [];
   List<SponsorshipPlan> _plansList = [];
-  // --- NOVAS VARIÁVEIS PARA O DROPDOWN DE INSTITUIÇÕES ---
   List<Institution> _institutionsList = [];
-  Institution? _selectedInstitution;
   
+  Institution? _selectedInstitution;
   Salesperson? _selectedSalesperson;
   SponsorshipPlan? _selectedPlan;
   String? _selectedStatus;
-  
   String? _selectedCompanyType;
+
   final List<String> _companyTypeOptions = ['Patrocinadora', 'Ponto de Coleta', 'Apoiadora', 'Parceira Logística'];
   final List<String> _statusOptions = ['Prospect', 'Urna Instalada', 'Patrocinador Ativo', 'Inativo'];
   final _cnpjMaskFormatter = MaskTextInputFormatter(mask: '##.###.###/####-##', filter: {"#": RegExp(r'[0-9]')});
@@ -71,15 +69,12 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
 
   Future<void> _loadDropdownData() async {
     try {
-      // Busca Vendedores
       final salespeopleSnapshot = await FirebaseFirestore.instance.collection('salespeople').get();
       _salespeopleList = salespeopleSnapshot.docs.map((doc) => Salesperson(id: doc.id, name: doc.data()['name'] ?? '')).toList();
 
-      // Busca Planos
       final plansSnapshot = await FirebaseFirestore.instance.collection('sponsorship_plans').get();
       _plansList = plansSnapshot.docs.map((doc) => SponsorshipPlan(id: doc.id, name: doc.data()['planName'] ?? '')).toList();
 
-      // --- NOVA BUSCA DE INSTITUIÇÕES ---
       final institutionsSnapshot = await FirebaseFirestore.instance.collection('institutions').get();
       _institutionsList = institutionsSnapshot.docs.map((doc) => Institution(id: doc.id, name: doc.data()['institutionName'] ?? '')).toList();
 
@@ -129,8 +124,7 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
       'sponsorshipPlanId': _selectedPlan?.id,
       'sponsorshipStatus': _selectedStatus,
       'companyType': _selectedCompanyType,
-      // --- NOVO CAMPO SALVO NO FIRESTORE ---
-      'institutionId': _selectedInstitution?.id,
+      'institutionId': _selectedInstitution?.id, // Salva o ID da instituição
       if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
     };
 
@@ -167,18 +161,22 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                   // --- NOVO CAMPO DE SELEÇÃO DE INSTITUIÇÃO ---
-                  DropdownButtonFormField<Institution?>(
-                    value: _selectedInstitution,
-                    decoration: const InputDecoration(labelText: 'Instituição Responsável (Opcional)'),
-                    items: [
-                      const DropdownMenuItem<Institution?>(value: null, child: Text("Nenhuma", style: TextStyle(fontStyle: FontStyle.italic))),
-                      ..._institutionsList.map((institution) {
-                        return DropdownMenuItem<Institution>(value: institution, child: Text(institution.name));
-                      }),
-                    ],
-                    onChanged: (value) => setState(() => _selectedInstitution = value),
-                  ),
+                   // --- CAMPO DE SELEÇÃO DE INSTITUIÇÃO ADICIONADO AQUI ---
+                  if (_institutionsList.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 16.0),
+                      child: Text("Nenhuma instituição cadastrada para vincular.", style: TextStyle(color: Colors.amber)),
+                    )
+                  else
+                    DropdownButtonFormField<Institution?>(
+                      value: _selectedInstitution,
+                      decoration: const InputDecoration(labelText: 'Instituição Responsável (Opcional)'),
+                      items: [
+                        const DropdownMenuItem<Institution?>(value: null, child: Text("Nenhuma", style: TextStyle(fontStyle: FontStyle.italic))),
+                        ..._institutionsList.map((institution) => DropdownMenuItem<Institution>(value: institution, child: Text(institution.name))),
+                      ],
+                      onChanged: (value) => setState(() => _selectedInstitution = value),
+                    ),
                   const SizedBox(height: 16),
                   TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nome da Empresa'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
                   const SizedBox(height: 16),
