@@ -21,7 +21,6 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
 
   final Completer<GoogleMapController> _mapController = Completer();
 
-  // Posição Padrão (São Paulo) caso a localização não seja obtida
   static const CameraPosition _kDefaultPosition = CameraPosition(
     target: LatLng(-23.55052, -46.633308),
     zoom: 12,
@@ -33,7 +32,6 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
     _initializeScreen();
   }
 
-  /// Inicializa a tela buscando a localização e as urnas.
   Future<void> _initializeScreen() async {
     try {
       await _getCurrentLocation(animate: false);
@@ -53,7 +51,6 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
     }
   }
 
-  /// Busca a localização atual do usuário e move a câmera.
   Future<void> _getCurrentLocation({bool animate = true}) async {
     if (mounted) setState(() => _isLoading = true);
     try {
@@ -98,6 +95,18 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
 
       print('>>> Coletando dados do Firestore: ${urnsSnapshot.docs.length} urnas encontradas.');
 
+      // Otimização: Carrega todos os documentos de empresas e escolas de uma vez
+      final schoolsSnapshot = await FirebaseFirestore.instance.collection('schools').get();
+      final companiesSnapshot = await FirebaseFirestore.instance.collection('companies').get();
+
+      final Map<String, dynamic> locations = {};
+      for (var doc in schoolsSnapshot.docs) {
+        locations['school-${doc.id}'] = doc.data();
+      }
+      for (var doc in companiesSnapshot.docs) {
+        locations['company-${doc.id}'] = doc.data();
+      }
+
       for (var urnDoc in urnsSnapshot.docs) {
         final urnData = urnDoc.data();
         final String? assignedToType = urnData['assignedToType'];
@@ -105,16 +114,9 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
         
         // Verifica se a urna tem um local atribuído
         if (assignedToType != null && assignedToId != null) {
-          // Busca o documento do local (escola ou empresa)
-          final assignedDoc = await FirebaseFirestore.instance
-              .collection('${assignedToType}s')
-              .doc(assignedToId)
-              .get();
+          final assignedData = locations['$assignedToType-$assignedToId'];
           
-          if (assignedDoc.exists) {
-            final assignedData = assignedDoc.data() as Map<String, dynamic>;
-            
-            // Verifica se o documento do local tem a localização
+          if (assignedData != null) {
             if (assignedData.containsKey('location') && assignedData['location'] is GeoPoint) {
               final GeoPoint location = assignedData['location'];
               final LatLng urnLatLng = LatLng(location.latitude, location.longitude);
@@ -144,14 +146,13 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
               print('>>> Urna ID: ${urnDoc.id} | Aviso: O documento atribuído não contém o campo de localização. Verifique o Firestore.');
             }
           } else {
-            print('>>> Urna ID: ${urnDoc.id} | Aviso: Documento atribuído não encontrado. ID: $assignedToId');
+            print('>>> Urna ID: ${urnDoc.id} | Aviso: Documento atribuído não encontrado no cache. ID: $assignedToId');
           }
         } else {
           print('>>> Urna ID: ${urnDoc.id} | Aviso: Urna não tem um local atribuído.');
         }
       }
 
-      // Se houver urnas cheias, cria a polyline
       if (fullUrnLocations.isNotEmpty) {
         final Polyline routePolyline = Polyline(
           polylineId: const PolylineId('route'),
@@ -171,7 +172,6 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
     }
   }
   
-  /// Lida com a checagem e solicitação de permissões de localização.
   Future<bool> _handleLocationPermission() async {
     LocationPermission permission;
     
