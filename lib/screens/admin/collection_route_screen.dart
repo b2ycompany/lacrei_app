@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 
 class CollectionRouteScreen extends StatefulWidget {
   const CollectionRouteScreen({super.key});
@@ -16,6 +17,7 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
   String? _errorMessage;
   Position? _currentPosition;
   Set<Marker> _markers = {};
+  Set<Polyline> _polylines = {};
 
   final Completer<GoogleMapController> _mapController = Completer();
 
@@ -35,9 +37,17 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
   Future<void> _initializeScreen() async {
     try {
       await _getCurrentLocation(animate: false);
-      await _loadUrns();
+      await _loadUrnsAndRoute();
+    } on PlatformException catch (e) {
+      if (e.code == 'MissingPluginException') {
+        _errorMessage = "Erro: Recurso de localização não disponível. Verifique as dependências e a plataforma.";
+      } else {
+        _errorMessage = e.message;
+      }
+      if (mounted) setState(() {});
     } catch (e) {
-      if (mounted) setState(() => _errorMessage = e.toString().replaceAll('Exception: ', ''));
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+      if (mounted) setState(() {});
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -47,8 +57,15 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
   Future<void> _getCurrentLocation({bool animate = true}) async {
     if (mounted) setState(() => _isLoading = true);
     try {
-      final hasPermission = await _handleLocationPermission();
-      if (!hasPermission) throw Exception("Permissão de localização negada.");
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        throw Exception("Serviços de localização estão desativados.");
+      }
+
+      final permission = await _handleLocationPermission();
+      if (!permission) {
+        throw Exception("Permissão de localização negada.");
+      }
       
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       
@@ -61,6 +78,10 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
           zoom: 15.0,
         )));
       }
+    } on MissingPluginException {
+       if (mounted) _showSnackBar("Erro: Recurso de localização não disponível na web.", isError: true);
+       _errorMessage = "Erro de implementação: Recurso de localização não disponível. Verifique as dependências.";
+       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) _showSnackBar("Erro ao obter localização: ${e.toString()}", isError: true);
     } finally {
@@ -68,28 +89,83 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
     }
   }
 
-  /// Carrega as urnas do Firestore e as converte em marcadores no mapa.
-  Future<void> _loadUrns() async {
+  /// Carrega todas as urnas, colore os marcadores e cria a rota.
+  Future<void> _loadUrnsAndRoute() async {
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('urns').get();
+      final urnsSnapshot = await FirebaseFirestore.instance.collection('urns').get();
       final Set<Marker> markers = {};
+      final List<LatLng> fullUrnLocations = [];
 
-      for (var urnDoc in snapshot.docs) {
-        final data = urnDoc.data();
-        // O campo 'location' no Firestore deve ser do tipo GeoPoint
-        if (data['location'] is GeoPoint) {
-          final GeoPoint location = data['location'];
-          markers.add(Marker(
-            markerId: MarkerId(urnDoc.id),
-            position: LatLng(location.latitude, location.longitude),
-            infoWindow: InfoWindow(
-              title: data['urnCode'] ?? 'Urna sem código',
-              snippet: 'Status: ${data['status'] ?? 'N/A'}',
-            ),
-          ));
+      print('>>> Coletando dados do Firestore: ${urnsSnapshot.docs.length} urnas encontradas.');
+
+      for (var urnDoc in urnsSnapshot.docs) {
+        final urnData = urnDoc.data();
+        final String? assignedToType = urnData['assignedToType'];
+        final String? assignedToId = urnData['assignedToId'];
+        
+        // Verifica se a urna tem um local atribuído
+        if (assignedToType != null && assignedToId != null) {
+          // Busca o documento do local (escola ou empresa)
+          final assignedDoc = await FirebaseFirestore.instance
+              .collection('${assignedToType}s')
+              .doc(assignedToId)
+              .get();
+          
+          if (assignedDoc.exists) {
+            final assignedData = assignedDoc.data() as Map<String, dynamic>;
+            
+            // Verifica se o documento do local tem a localização
+            if (assignedData.containsKey('location') && assignedData['location'] is GeoPoint) {
+              final GeoPoint location = assignedData['location'];
+              final LatLng urnLatLng = LatLng(location.latitude, location.longitude);
+              
+              print('>>> Urna ID: ${urnDoc.id} | Localização encontrada para ${assignedData['name']} (GeoPoint): ${urnLatLng.latitude}, ${urnLatLng.longitude}');
+
+              final String status = urnData['status'] ?? 'Desconhecido';
+              BitmapDescriptor markerColor;
+
+              if (status == 'Cheia') {
+                markerColor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+                fullUrnLocations.add(urnLatLng);
+              } else {
+                markerColor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+              }
+
+              markers.add(Marker(
+                markerId: MarkerId(urnDoc.id),
+                position: urnLatLng,
+                icon: markerColor,
+                infoWindow: InfoWindow(
+                  title: urnData['urnCode'] ?? 'Urna sem código',
+                  snippet: 'Status: $status | Local: ${urnData['assignedToName']}',
+                ),
+              ));
+            } else {
+              print('>>> Urna ID: ${urnDoc.id} | Aviso: O documento atribuído não contém o campo de localização. Verifique o Firestore.');
+            }
+          } else {
+            print('>>> Urna ID: ${urnDoc.id} | Aviso: Documento atribuído não encontrado. ID: $assignedToId');
+          }
+        } else {
+          print('>>> Urna ID: ${urnDoc.id} | Aviso: Urna não tem um local atribuído.');
         }
       }
-      if (mounted) setState(() => _markers = markers);
+
+      // Se houver urnas cheias, cria a polyline
+      if (fullUrnLocations.isNotEmpty) {
+        final Polyline routePolyline = Polyline(
+          polylineId: const PolylineId('route'),
+          color: Colors.blue,
+          width: 5,
+          points: fullUrnLocations,
+        );
+        _polylines.add(routePolyline);
+      }
+
+      if (mounted) setState(() {
+        _markers = markers;
+        _polylines = _polylines;
+      });
     } catch (e) {
       if (mounted) _showSnackBar("Erro ao carregar as urnas: ${e.toString()}", isError: true);
     }
@@ -97,14 +173,8 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
   
   /// Lida com a checagem e solicitação de permissões de localização.
   Future<bool> _handleLocationPermission() async {
-    bool serviceEnabled;
     LocationPermission permission;
     
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _showSnackBar('Serviços de localização estão desativados.', isError: true);
-      return false;
-    }
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -146,12 +216,13 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
                 ? CameraPosition(target: LatLng(_currentPosition!.latitude, _currentPosition!.longitude), zoom: 14)
                 : _kDefaultPosition,
             markers: _markers,
+            polylines: _polylines,
             myLocationEnabled: true,
-            myLocationButtonEnabled: false, // Usaremos nosso próprio botão
+            myLocationButtonEnabled: false,
           ),
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withAlpha(128),
               child: const Center(child: CircularProgressIndicator()),
             ),
           if (_errorMessage != null)
