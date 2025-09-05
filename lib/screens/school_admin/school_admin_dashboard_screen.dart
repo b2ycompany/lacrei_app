@@ -70,8 +70,9 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    // ALTERAÇÃO (Item #5): Controller agora tem 4 abas, pois "Registrar Coleta" foi removida.
     return DefaultTabController(
-      length: 5, 
+      length: 4, 
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Dashboard da Escola"),
@@ -86,10 +87,9 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
             isScrollable: true,
             tabs: [
               const Tab(icon: Icon(Icons.dashboard), text: "Painel"),
-              const Tab(icon: Icon(Icons.campaign), text: "Campanhas"),
-              const Tab(icon: Icon(Icons.add_task), text: "Registrar Coleta"),
+              // ALTERAÇÃO (Item #3): Texto da aba alterado para "Prêmios".
+              const Tab(icon: Icon(Icons.campaign), text: "Prêmios"),
               const Tab(icon: Icon(Icons.inventory_2_outlined), text: "Urnas"),
-              // ABA DE SOLICITAÇÕES COM BADGE DE NOTIFICAÇÃO
               Tab(
                 child: StreamBuilder<QuerySnapshot>(
                   stream: _schoolId == null ? null : FirebaseFirestore.instance.collection('schools').doc(_schoolId!).collection('pendingRequests').snapshots(),
@@ -125,10 +125,10 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
             : _schoolId == null
                 ? const Center(child: Text("Administrador não vinculado a uma escola."))
                 : TabBarView(
+                    // ALTERAÇÃO (Item #5): View de "Registrar Coleta" removida.
                     children: [
                       SchoolDashboardView(schoolId: _schoolId!),
                       CampaignApprovalView(schoolId: _schoolId!),
-                      RegisterCollectionView(schoolId: _schoolId!),
                       UrnStatusView(assignedToId: _schoolId!),
                       PendingRequestsView(schoolId: _schoolId!),
                     ],
@@ -150,16 +150,12 @@ class SchoolDashboardView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Card para mostrar o total arrecadado
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('schools').doc(schoolId).snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || snapshot.data?.data() == null) {
-                return const Card(child: Padding(padding: EdgeInsets.all(20.0), child: Text("N/A kg")));
-              }
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              if (!snapshot.hasData || snapshot.data?.data() == null) return const Card(child: Padding(padding: EdgeInsets.all(20.0), child: Text("N/A kg")));
+              
               final schoolData = snapshot.data!.data() as Map<String, dynamic>;
               final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
               return Card(
@@ -178,17 +174,10 @@ class SchoolDashboardView extends StatelessWidget {
             },
           ),
           const SizedBox(height: 16),
-          // Card para mostrar o número de alunos e funcionários
           StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .where('schoolId', isEqualTo: schoolId)
-                .where('schoolLinkStatus', isEqualTo: 'approved')
-                .snapshots(),
+            stream: FirebaseFirestore.instance.collection('users').where('schoolId', isEqualTo: schoolId).where('schoolLinkStatus', isEqualTo: 'approved').snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
               final count = snapshot.data?.docs.length ?? 0;
               return Card(
                 elevation: 4,
@@ -211,7 +200,6 @@ class SchoolDashboardView extends StatelessWidget {
   }
 }
 
-
 // WIDGET PARA EXIBIR E GERIR O STATUS DA URNA
 class UrnStatusView extends StatelessWidget {
   final String assignedToId;
@@ -223,28 +211,20 @@ class UrnStatusView extends StatelessWidget {
         'status': 'Cheia',
         'lastFullTimestamp': Timestamp.now(),
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Alerta de urna cheia enviado à equipe de coleta!"), backgroundColor: Colors.green),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Alerta de urna cheia enviado à equipe de coleta!"), backgroundColor: Colors.green));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Erro ao sinalizar: ${e.toString()}"), backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao sinalizar: ${e.toString()}"), backgroundColor: Colors.red));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('urns')
-          .where('assignedToId', isEqualTo: assignedToId)
-          .limit(1)
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('urns').where('assignedToId', isEqualTo: assignedToId).limit(1).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        
+        // ALTERAÇÃO (Item #4): Tratamento de erro mais robusto.
         if (snapshot.hasError) {
           return const Center(child: Text("Erro ao carregar dados da urna."));
         }
@@ -273,10 +253,7 @@ class UrnStatusView extends StatelessWidget {
                       Text(data['urnCode'] ?? 'URNA', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
                       Chip(
-                        label: Text(
-                          status,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
+                        label: Text(status, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         backgroundColor: isFull ? Colors.redAccent : Colors.green,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
@@ -302,26 +279,29 @@ class UrnStatusView extends StatelessWidget {
   }
 }
 
-// WIDGET PARA VISUALIZAR CAMPANHAS
+// WIDGET PARA VISUALIZAR PRÊMIOS (ANTIGO CAMPANHAS)
 class CampaignApprovalView extends StatelessWidget {
   final String schoolId;
   const CampaignApprovalView({super.key, required this.schoolId});
+  
   Future<void> _activateCampaign(BuildContext context, String campaignId) async {
     try {
       await FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('activeCampaigns').doc(campaignId).update({'status': 'active'});
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Campanha ativada com sucesso!"), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Prêmio ativado com sucesso!"), backgroundColor: Colors.green));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao ativar campanha: ${e.toString()}"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao ativar prêmio: ${e.toString()}"), backgroundColor: Colors.red));
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('activeCampaigns').orderBy('startDate', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator()); }
-        if (snapshot.hasError) { return const Center(child: Text("Erro ao carregar campanhas.")); }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) { return const Center(child: Text("Nenhuma campanha associada a esta escola.")); }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return const Center(child: Text("Erro ao carregar prêmios."));
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhum prêmio associado a esta escola."));
+        
         final campaigns = snapshot.data!.docs;
         return ListView.builder(
           itemCount: campaigns.length,
@@ -336,17 +316,18 @@ class CampaignApprovalView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(data['campaignName'] ?? 'Campanha sem nome', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(data['campaignName'] ?? 'Prêmio sem nome', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    Text("Prêmio: ${data['prizeName'] ?? 'Não informado'}"),
+                    // Os nomes dos campos aqui serão ajustados quando reformularmos a tela de campanhas
+                    Text("Oferecido por: ${data['prizeName'] ?? 'Não informado'}"),
                     Text("Meta: ${data['goalKg'] ?? 'N/A'} kg"),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Chip(label: Text(status == 'active' ? 'Ativa' : 'Pendente', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: status == 'active' ? Colors.green : Colors.orange),
+                        Chip(label: Text(status == 'active' ? 'Ativo' : 'Pendente', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)), backgroundColor: status == 'active' ? Colors.green : Colors.orange),
                         if (status == 'pending_approval')
-                          ElevatedButton(onPressed: () => _activateCampaign(context, campaignDoc.id), child: const Text("Ativar Campanha")),
+                          ElevatedButton(onPressed: () => _activateCampaign(context, campaignDoc.id), child: const Text("Ativar Prêmio")),
                       ],
                     ),
                   ],
@@ -356,88 +337,6 @@ class CampaignApprovalView extends StatelessWidget {
           },
         );
       },
-    );
-  }
-}
-
-// WIDGET PARA REGISTRAR COLETA
-class RegisterCollectionView extends StatefulWidget {
-  final String schoolId;
-  const RegisterCollectionView({super.key, required this.schoolId});
-  @override
-  State<RegisterCollectionView> createState() => _RegisterCollectionViewState();
-}
-class _RegisterCollectionViewState extends State<RegisterCollectionView> {
-  final _weightController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _isRegistering = false;
-  DocumentSnapshot? _selectedCampaign;
-  Future<void> _registerCollection() async {
-    if (!_formKey.currentState!.validate() || _selectedCampaign == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Por favor, preencha o peso e selecione uma campanha."), backgroundColor: Colors.red));
-      return;
-    }
-    setState(() => _isRegistering = true);
-    try {
-      final weightToAdd = double.parse(_weightController.text.replaceAll(',', '.'));
-      final schoolRef = FirebaseFirestore.instance.collection('schools').doc(widget.schoolId);
-      final campaignRef = schoolRef.collection('activeCampaigns').doc(_selectedCampaign!.id);
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        transaction.update(schoolRef, {'totalCollectedKg': FieldValue.increment(weightToAdd)});
-        transaction.update(campaignRef, {'collectedKg': FieldValue.increment(weightToAdd)});
-      });
-      await schoolRef.collection('collections').add({'weight': weightToAdd, 'date': Timestamp.now(), 'registeredBy': FirebaseAuth.instance.currentUser?.uid, 'campaignId': _selectedCampaign!.id, });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Coleta registrada com sucesso!"), backgroundColor: Colors.green));
-      _weightController.clear();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro: ${e.toString()}"), backgroundColor: Colors.red));
-    } finally {
-      if(mounted) setState(() => _isRegistering = false);
-    }
-  }
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text("Registrar Nova Coleta", style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white)),
-                const SizedBox(height: 16),
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).collection('activeCampaigns').where('status', isEqualTo: 'active').snapshots(),
-                  builder: (context, campaignSnapshot) {
-                    if (!campaignSnapshot.hasData) { return const Text("A carregar campanhas..."); }
-                    final activeCampaigns = campaignSnapshot.data!.docs;
-                    return DropdownButtonFormField<DocumentSnapshot>(
-                      value: _selectedCampaign, hint: const Text("Selecione a Campanha"),
-                      items: activeCampaigns.map((doc) { return DropdownMenuItem<DocumentSnapshot>(value: doc, child: Text(doc['campaignName'] ?? 'Campanha sem nome')); }).toList(),
-                      onChanged: (value) { setState(() { _selectedCampaign = value; }); },
-                      validator: (value) => value == null ? 'Selecione uma campanha' : null,
-                    );
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _weightController, decoration: const InputDecoration(labelText: 'Peso Arrecadado (kg)', hintText: 'Ex: 15,5'), keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Insira o peso.';
-                    if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Insira um número válido.';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(onPressed: _isRegistering ? null : _registerCollection, icon: const Icon(Icons.add_task), label: const Text("Registrar Coleta"), style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16))),
-              ],
-            ),
-          ),
-        ),
-        if (_isRegistering) Container(color: Colors.black.withOpacity(0.5), child: const Center(child: CircularProgressIndicator())),
-      ],
     );
   }
 }
@@ -473,9 +372,9 @@ class PendingRequestsView extends StatelessWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('pendingRequests').snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) { return const Center(child: CircularProgressIndicator()); }
-        if (snapshot.hasError) { return const Center(child: Text("Erro ao carregar solicitações.")); }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) { return const Center(child: Text("Nenhuma solicitação pendente no momento.")); }
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return const Center(child: Text("Erro ao carregar solicitações."));
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhuma solicitação pendente no momento."));
         
         final requests = snapshot.data!.docs;
         return ListView.builder(

@@ -1,5 +1,3 @@
-// lib/screens/admin/school_management_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_edit_school_screen.dart';
@@ -12,14 +10,23 @@ class SchoolManagementScreen extends StatefulWidget {
 }
 
 class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<void> _deleteSchool(BuildContext context, DocumentSnapshot schoolDoc) async {
-    final bool? confirmed = await showDialog<bool>(
+  void _showSnackBar(String message, {bool isError = true}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: isError ? Colors.redAccent : Colors.green),
+      );
+    }
+  }
+
+  Future<void> _deleteSchool(DocumentSnapshot schoolDoc) async {
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text("Confirmar Exclusão"),
-          content: Text("Tem certeza de que deseja excluir a instituição '${schoolDoc['schoolName']}'? Esta ação não pode ser desfeita."),
+          content: Text("Tem certeza de que deseja excluir a instituição '${schoolDoc['schoolName']}'? Esta ação irá remover o perfil do usuário e desvincular todas as urnas."),
           actions: <Widget>[
             TextButton(
               child: const Text("Cancelar"),
@@ -36,18 +43,32 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
 
     if (confirmed == true) {
       try {
-        await schoolDoc.reference.delete();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Instituição de ensino excluída com sucesso!"), backgroundColor: Colors.green),
-          );
+        final batch = _firestore.batch();
+        final schoolId = schoolDoc.id;
+
+        // 1. Deleta o documento da escola
+        batch.delete(_firestore.collection('schools').doc(schoolId));
+        
+        // 2. Deleta o usuário da escola na coleção 'users'
+        final userQuery = await _firestore.collection('users').where('schoolId', isEqualTo: schoolId).limit(1).get();
+        if (userQuery.docs.isNotEmpty) {
+          batch.delete(userQuery.docs.first.reference);
         }
+
+        // 3. Desvincula as urnas que estavam atribuídas a esta escola
+        final urnsQuery = await _firestore.collection('urns').where('assignedToId', isEqualTo: schoolId).get();
+        for (var doc in urnsQuery.docs) {
+          batch.update(doc.reference, {
+            'assignedToId': null,
+            'assignedToName': null,
+            'status': 'Vazia',
+          });
+        }
+
+        await batch.commit();
+        _showSnackBar("Instituição de ensino e dados associados excluídos com sucesso!", isError: false);
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Erro ao excluir: ${e.toString()}"), backgroundColor: Colors.red),
-          );
-        }
+        _showSnackBar("Erro ao excluir instituição de ensino: $e", isError: true);
       }
     }
   }
@@ -56,17 +77,16 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Gerenciar Escolas e Faculdades"),
+        title: const Text("Gestão de Instituições de Ensino"),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(context, MaterialPageRoute(builder: (context) => const AddEditSchoolScreen()));
         },
-        tooltip: "Adicionar",
         child: const Icon(Icons.add),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('schools').orderBy('schoolName').snapshots(),
+        stream: _firestore.collection('schools').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -94,7 +114,7 @@ class _SchoolManagementScreenState extends State<SchoolManagementScreen> {
                   subtitle: Text(data['city'] ?? 'Cidade não informada'),
                   trailing: IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                    onPressed: () => _deleteSchool(context, schoolDoc),
+                    onPressed: () => _deleteSchool(schoolDoc),
                     tooltip: "Excluir",
                   ),
                   onTap: () {

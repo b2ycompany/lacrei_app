@@ -11,105 +11,150 @@ class SponsorshipPlansScreen extends StatefulWidget {
 }
 
 class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
+  final _nameController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  bool _isSaving = false;
+
+  void _showSnackBar(String message, {bool isError = true}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: isError ? Colors.redAccent : Colors.green),
+      );
+    }
+  }
 
   void _showPlanForm({DocumentSnapshot? plan}) {
     final isEditing = plan != null;
-    final formKey = GlobalKey<FormState>();
     
-    final nameController = TextEditingController(text: isEditing ? plan['name'] : '');
-    final priceController = TextEditingController(text: isEditing ? (plan['price'] as num?)?.toString() : '');
-    final descriptionController = TextEditingController(text: isEditing ? plan['description'] : '');
+    // Limpa ou preenche os controladores
+    if (isEditing) {
+      final data = plan.data() as Map<String, dynamic>;
+      _nameController.text = data['name'] ?? '';
+      _priceController.text = (data['price'] as num?)?.toString() ?? '';
+      _descriptionController.text = data['description'] ?? '';
+    } else {
+      _nameController.clear();
+      _priceController.clear();
+      _descriptionController.clear();
+    }
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(isEditing ? "Editar Plano" : "Novo Plano de Patrocínio"),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: "Nome do Plano (Ex: Ouro)"),
-                    validator: (v) => v!.isEmpty ? "Campo obrigatório" : null,
+        return StatefulBuilder(
+          builder: (context, setStateInDialog) {
+            return AlertDialog(
+              title: Text(isEditing ? "Editar Plano" : "Novo Plano de Patrocínio"),
+              content: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(labelText: "Nome do Plano (Ex: Ouro)"),
+                        validator: (v) => v!.isEmpty ? "Campo obrigatório" : null,
+                      ),
+                      TextFormField(
+                        controller: _priceController,
+                        decoration: const InputDecoration(labelText: "Preço (R\$)"),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        validator: (v) {
+                          if (v!.isEmpty) return "Campo obrigatório";
+                          if (double.tryParse(v) == null) return "Insira um número válido";
+                          return null;
+                        },
+                      ),
+                      TextFormField(
+                        controller: _descriptionController,
+                        decoration: const InputDecoration(labelText: "Descrição"),
+                        maxLines: 3,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: priceController,
-                    decoration: const InputDecoration(labelText: "Preço (R\$)"),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return "Campo obrigatório";
-                      if (double.tryParse(v.replaceAll(',', '.')) == null) return "Número inválido";
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: descriptionController,
-                    decoration: const InputDecoration(labelText: "Benefícios / Descrição"),
-                    maxLines: 4,
-                    validator: (v) => v!.isEmpty ? "Campo obrigatório" : null,
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
-            ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  final planData = {
-                    'name': nameController.text.trim(),
-                    'price': double.parse(priceController.text.replaceAll(',', '.')),
-                    'description': descriptionController.text.trim(),
-                    'isActive': true,
-                  };
-
-                  try {
-                    if (isEditing) {
-                      await FirebaseFirestore.instance.collection('sponsorship_plans').doc(plan.id).update(planData);
-                    } else {
-                      planData['createdAt'] = Timestamp.now();
-                      await FirebaseFirestore.instance.collection('sponsorship_plans').add(planData);
-                    }
-                    Navigator.pop(context);
-                  } catch (e) {
-                    // Tratar erro
-                  }
-                }
-              },
-              child: const Text("Salvar"),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text("Cancelar"),
+                ),
+                ElevatedButton(
+                  onPressed: _isSaving
+                      ? null
+                      : () async {
+                          if (_formKey.currentState!.validate()) {
+                            setStateInDialog(() => _isSaving = true);
+                            await _savePlan(isEditing: isEditing, plan: plan);
+                            setStateInDialog(() => _isSaving = false);
+                            Navigator.of(context).pop();
+                          }
+                        },
+                  child: _isSaving
+                      ? const CircularProgressIndicator()
+                      : Text(isEditing ? "Salvar" : "Adicionar"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
+  Future<void> _savePlan({required bool isEditing, DocumentSnapshot? plan}) async {
+    try {
+      final data = {
+        'name': _nameController.text.trim(),
+        'price': double.parse(_priceController.text.replaceAll(',', '.')),
+        'description': _descriptionController.text.trim(),
+      };
+
+      if (isEditing) {
+        await FirebaseFirestore.instance.collection('sponsorshipPlans').doc(plan!.id).update(data);
+        _showSnackBar("Plano atualizado com sucesso!", isError: false);
+      } else {
+        await FirebaseFirestore.instance.collection('sponsorshipPlans').add(data);
+        _showSnackBar("Novo plano adicionado!", isError: false);
+      }
+    } catch (e) {
+      _showSnackBar("Erro ao salvar plano: $e", isError: true);
+    }
+  }
+
   Future<void> _deletePlan(DocumentSnapshot plan) async {
-     final bool? confirmed = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Confirmar Exclusão"),
-        content: Text("Tem certeza que deseja excluir o plano '${plan['name']}'?"),
+        content: Text("Tem certeza que deseja excluir o plano de patrocínio '${plan['name']}'?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("Excluir", style: TextStyle(color: Colors.red)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Excluir", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await FirebaseFirestore.instance.collection('sponsorship_plans').doc(plan.id).delete();
+      try {
+        await FirebaseFirestore.instance.collection('sponsorshipPlans').doc(plan.id).delete();
+        _showSnackBar("Plano excluído com sucesso!", isError: false);
+      } catch (e) {
+        _showSnackBar("Erro ao excluir plano: $e", isError: true);
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _priceController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
   }
 
   @override
@@ -117,14 +162,16 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Planos de Patrocínio"),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showPlanForm(),
-        tooltip: "Adicionar Plano",
-        child: const Icon(Icons.add),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _showPlanForm(),
+            tooltip: 'Adicionar novo plano',
+          ),
+        ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('sponsorship_plans').orderBy('price', descending: true).snapshots(),
+        stream: FirebaseFirestore.instance.collection('sponsorshipPlans').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -150,9 +197,17 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
                 child: ListTile(
                   title: Text(data['name'] ?? 'Plano sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(data['description'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: Text("R\$ ${price.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.greenAccent)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text("R\$ ${price.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                        onPressed: () => _deletePlan(plan),
+                      ),
+                    ],
+                  ),
                   onTap: () => _showPlanForm(plan: plan),
-                  onLongPress: () => _deletePlan(plan), // Segurar para apagar
                 ),
               );
             },

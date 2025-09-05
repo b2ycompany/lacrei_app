@@ -1,8 +1,6 @@
-// lib/screens/admin/sales_management_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'salesperson_registration_screen.dart';
+import 'edit_salesperson_screen.dart';
 
 class SalesManagementScreen extends StatefulWidget {
   const SalesManagementScreen({super.key});
@@ -12,13 +10,22 @@ class SalesManagementScreen extends StatefulWidget {
 }
 
 class _SalesManagementScreenState extends State<SalesManagementScreen> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  void _showSnackBar(String message, {bool isError = true}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: isError ? Colors.redAccent : Colors.green),
+      );
+    }
+  }
 
   Future<void> _deleteSalesperson(DocumentSnapshot salespersonDoc) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Confirmar Exclusão"),
-        content: Text("Tem certeza que deseja excluir o vendedor '${salespersonDoc['name']}'? Esta ação irá apagar o perfil, mas não o utilizador de login (isso deve ser feito no Firebase Authentication)."),
+        content: const Text("Tem certeza que deseja excluir este vendedor? Esta ação é irreversível e irá remover o perfil do vendedor e o usuário associado."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Excluir", style: TextStyle(color: Colors.red))),
@@ -28,13 +35,21 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
 
     if (confirmed == true) {
       try {
-        final batch = FirebaseFirestore.instance.batch();
-        batch.delete(FirebaseFirestore.instance.collection('salespeople').doc(salespersonDoc.id));
-        batch.delete(FirebaseFirestore.instance.collection('users').doc(salespersonDoc.id));
+        final batch = _firestore.batch();
+        
+        // 1. Deleta o documento do vendedor na coleção 'salespeople'
+        batch.delete(_firestore.collection('salespeople').doc(salespersonDoc.id));
+
+        // 2. Busca e deleta o usuário associado na coleção 'users'
+        final userQuery = await _firestore.collection('users').where('salespersonId', isEqualTo: salespersonDoc.id).limit(1).get();
+        if (userQuery.docs.isNotEmpty) {
+          batch.delete(userQuery.docs.first.reference);
+        }
+
         await batch.commit();
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Perfil do vendedor excluído com sucesso!"), backgroundColor: Colors.green));
+        _showSnackBar("Vendedor e dados associados excluídos com sucesso!", isError: false);
       } catch (e) {
-        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao excluir: ${e.toString()}"), backgroundColor: Colors.red));
+        _showSnackBar("Erro ao excluir vendedor: $e", isError: true);
       }
     }
   }
@@ -42,46 +57,47 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Gestão da Equipe de Vendas")),
+      appBar: AppBar(
+        title: const Text("Gestão de Vendedores"),
+      ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalespersonRegistrationScreen())),
-        tooltip: "Adicionar Vendedor",
-        child: const Icon(Icons.person_add),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const EditSalespersonScreen(),
+            ),
+          );
+        },
+        child: const Icon(Icons.add),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('salespeople').snapshots(),
+        stream: _firestore.collection('salespeople').orderBy('name').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return const Center(child: Text("Erro ao carregar vendedores."));
+            return Center(child: Text("Erro ao carregar dados: ${snapshot.error}"));
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text("Nenhum vendedor cadastrado."));
           }
-          final salespeople = snapshot.data!.docs;
-          
-          // Lógica da Dashboard: Calcular os totais
-          int totalSales = 0;
-          double totalValue = 0.0;
-          for (var doc in salespeople) {
-            final data = doc.data() as Map<String, dynamic>;
-            totalSales += (data['salesCount'] as int? ?? 0);
-            totalValue += (data['totalSalesValue'] as num? ?? 0).toDouble();
-          }
+
+          final salespeopleDocs = snapshot.data!.docs;
+          final totalSalespeople = salespeopleDocs.length;
+          final totalSales = salespeopleDocs.fold<num>(0, (sum, doc) => sum + (doc.data() as Map<String, dynamic>)['salesCount'] ?? 0);
 
           return Column(
             children: [
-              // Dashboard com os totais
+              // Dashboard de métricas
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildDashboardMetric("Vendedores", salespeople.length.toString()),
-                    _buildDashboardMetric("Vendas Totais", totalSales.toString()),
-                    _buildDashboardMetric("Valor Total", "R\$ ${totalValue.toStringAsFixed(2)}"),
+                    _buildDashboardMetric("Total de Vendedores", totalSalespeople.toString()),
+                    _buildDashboardMetric("Total de Vendas", totalSales.toString()),
                   ],
                 ),
               ),
@@ -89,9 +105,9 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
               // Lista de vendedores
               Expanded(
                 child: ListView.builder(
-                  itemCount: salespeople.length,
+                  itemCount: salespeopleDocs.length,
                   itemBuilder: (context, index) {
-                    final salespersonDoc = salespeople[index];
+                    final salespersonDoc = salespeopleDocs[index];
                     final data = salespersonDoc.data() as Map<String, dynamic>;
                     
                     return Card(
@@ -99,12 +115,19 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
                       child: ListTile(
                         leading: const CircleAvatar(child: Icon(Icons.person)),
                         title: Text(data['name'] ?? 'Nome não disponível', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("Vendas: ${data['salesCount'] ?? 0} | Total: R\$ ${(data['totalSalesValue'] as num? ?? 0).toStringAsFixed(2)}"),
+                        subtitle: Text(
+                          "Comissão: ${data['commission']?.toString() ?? 'N/A'}% | Vendas: ${data['salesCount'] ?? 0} | Total: R\$ ${(data['totalSalesValue'] as num? ?? 0).toStringAsFixed(2)}"
+                        ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
                           onPressed: () => _deleteSalesperson(salespersonDoc),
                         ),
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => SalespersonRegistrationScreen(salesperson: salespersonDoc))),
+                        onTap: () => Navigator.push(
+                          context, 
+                          MaterialPageRoute(
+                            builder: (context) => EditSalespersonScreen(salespersonId: salespersonDoc.id)
+                          )
+                        ),
                       ),
                     );
                   },

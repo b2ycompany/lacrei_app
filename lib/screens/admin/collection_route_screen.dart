@@ -4,6 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CollectionRouteScreen extends StatefulWidget {
   const CollectionRouteScreen({super.key});
@@ -86,82 +87,66 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
     }
   }
 
-  /// Carrega todas as urnas, colore os marcadores e cria a rota.
+  /// Carrega todas as urnas do Firestore e as exibe no mapa.
+  /// Apenas para usuários Super Admin, que têm permissão de leitura total na coleção 'urns'.
   Future<void> _loadUrnsAndRoute() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception("Usuário não autenticado.");
+      }
+
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final userData = userDoc.data();
+
+      if (userData?['role'] != 'super_admin') {
+        _errorMessage = "Acesso Negado: Apenas administradores podem visualizar a rota de coleta.";
+        if (mounted) setState(() {});
+        return;
+      }
+
+      // Consulta simplificada para buscar todas as urnas
       final urnsSnapshot = await FirebaseFirestore.instance.collection('urns').get();
       final Set<Marker> markers = {};
-      final List<LatLng> fullUrnLocations = [];
-
+      
+      // DIAGNÓSTICO: Imprime o número de documentos encontrados
       print('>>> Coletando dados do Firestore: ${urnsSnapshot.docs.length} urnas encontradas.');
 
       for (var urnDoc in urnsSnapshot.docs) {
         final urnData = urnDoc.data();
-        final String? assignedToType = urnData['assignedToType'];
-        final String? assignedToId = urnData['assignedToId'];
         
-        // Verifica se a urna tem um local atribuído
-        if (assignedToType != null && assignedToId != null) {
-          
-          // Busca o documento de forma individual e robusta
-          final assignedDoc = await FirebaseFirestore.instance
-              .collection('${assignedToType}s')
-              .doc(assignedToId)
-              .get();
-          
-          if (assignedDoc.exists) {
-            final assignedData = assignedDoc.data() as Map<String, dynamic>;
-
-            if (assignedData.containsKey('location') && assignedData['location'] is GeoPoint) {
-              final GeoPoint location = assignedData['location'];
-              final LatLng urnLatLng = LatLng(location.latitude, location.longitude);
-              
-              print('>>> Urna ID: ${urnDoc.id} | Localização encontrada para ${assignedData['name']} (GeoPoint): ${urnLatLng.latitude}, ${urnLatLng.longitude}');
-
-              final String status = urnData['status'] ?? 'Desconhecido';
-              BitmapDescriptor markerColor;
-
-              if (status == 'Cheia') {
-                markerColor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-                fullUrnLocations.add(urnLatLng);
-              } else {
-                markerColor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-              }
-
-              markers.add(Marker(
-                markerId: MarkerId(urnDoc.id),
-                position: urnLatLng,
-                icon: markerColor,
-                infoWindow: InfoWindow(
-                  title: urnData['urnCode'] ?? 'Código indisponível',
-                  snippet: 'Status: $status | Local: ${urnData['assignedToName']}',
-                ),
-              ));
+        // Assegura que o documento possui as informações necessárias
+        if (urnData.containsKey('location') && urnData['location'] is GeoPoint) {
+            final GeoPoint location = urnData['location'];
+            final LatLng urnLatLng = LatLng(location.latitude, location.longitude);
+            
+            final String status = urnData['status'] ?? 'Desconhecido';
+            BitmapDescriptor markerColor;
+            
+            // Define a cor do marcador com base no status
+            if (status == 'Cheia') {
+              markerColor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
             } else {
-              print('>>> Urna ID: ${urnDoc.id} | Aviso: O documento atribuído não contém o campo de localização. Verifique o Firestore.');
+              markerColor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
             }
-          } else {
-            print('>>> Urna ID: ${urnDoc.id} | Aviso: Documento atribuído não encontrado. ID: $assignedToId');
-          }
-        } else {
-          print('>>> Urna ID: ${urnDoc.id} | Aviso: Urna não tem um local atribuído.');
+
+            markers.add(Marker(
+              markerId: MarkerId(urnDoc.id),
+              position: urnLatLng,
+              icon: markerColor,
+              infoWindow: InfoWindow(
+                title: urnData['urnCode'] ?? 'Código indisponível',
+                snippet: 'Status: $status | Local: ${urnData['assignedToName']}',
+              ),
+            ));
         }
       }
-
-      if (fullUrnLocations.isNotEmpty) {
-        final Polyline routePolyline = Polyline(
-          polylineId: const PolylineId('route'),
-          color: Colors.blue,
-          width: 5,
-          points: fullUrnLocations,
-        );
-        _polylines.add(routePolyline);
+      
+      if (mounted) {
+        setState(() {
+          _markers = markers;
+        });
       }
-
-      if (mounted) setState(() {
-        _markers = markers;
-        _polylines = _polylines;
-      });
     } catch (e) {
       if (mounted) _showSnackBar("Erro ao carregar as urnas: ${e.toString()}", isError: true);
     }

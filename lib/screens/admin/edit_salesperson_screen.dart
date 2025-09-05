@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class EditSalespersonScreen extends StatefulWidget {
   final String? salespersonId;
@@ -16,6 +17,7 @@ class _EditSalespersonScreenState extends State<EditSalespersonScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _commissionController = TextEditingController();
 
   bool _isLoading = true;
   bool get _isEditing => widget.salespersonId != null;
@@ -30,6 +32,14 @@ class _EditSalespersonScreenState extends State<EditSalespersonScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _commissionController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSalespersonData() async {
     try {
       final doc = await FirebaseFirestore.instance.collection('salespeople').doc(widget.salespersonId).get();
@@ -37,9 +47,10 @@ class _EditSalespersonScreenState extends State<EditSalespersonScreen> {
         final data = doc.data()!;
         _nameController.text = data['name'] ?? '';
         _emailController.text = data['email'] ?? '';
+        _commissionController.text = (data['commission'] ?? 0).toString();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
+      if (mounted) _showSnackBar("Erro ao carregar dados do vendedor: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -47,32 +58,52 @@ class _EditSalespersonScreenState extends State<EditSalespersonScreen> {
 
   Future<void> _saveSalesperson() async {
     if (!_formKey.currentState!.validate()) return;
-
-    setState(() => _isLoading = true);
-
-    final salespersonData = {
-      'name': _nameController.text.trim(),
-      'email': _emailController.text.trim(),
-    };
+    
+    if (mounted) setState(() => _isLoading = true);
 
     try {
-      if (_isEditing) {
-        await FirebaseFirestore.instance.collection('salespeople').doc(widget.salespersonId).update(salespersonData);
-      } else {
-        await FirebaseFirestore.instance.collection('salespeople').add(salespersonData);
+      final commission = double.tryParse(_commissionController.text) ?? 0.0;
+      if (commission < 0 || commission > 100) {
+        _showSnackBar("A comissão deve ser um valor entre 0 e 100.");
+        return;
       }
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Vendedor salvo com sucesso!'), backgroundColor: Colors.green)
-        );
-        Navigator.of(context).pop();
+      final data = {
+        'name': _nameController.text,
+        'email': _emailController.text,
+        'commission': commission,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (_isEditing) {
+        await FirebaseFirestore.instance.collection('salespeople').doc(widget.salespersonId).update(data);
+        _showSnackBar("Vendedor atualizado com sucesso!");
+      } else {
+        // Chamada da Cloud Function para criar o usuário e o documento
+        final result = await FirebaseFunctions.instance.httpsCallable('createSalesperson').call({
+          'name': _nameController.text,
+          'email': _emailController.text,
+          'commission': commission,
+        });
+        if (result.data['success'] == true) {
+          _showSnackBar("Vendedor criado com sucesso!");
+        } else {
+          _showSnackBar("Erro ao criar vendedor: ${result.data['message']}");
+        }
       }
+      
+      if (mounted) Navigator.of(context).pop();
+
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
-        setState(() => _isLoading = false);
-      }
+      _showSnackBar("Erro ao salvar vendedor: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -108,6 +139,24 @@ class _EditSalespersonScreenState extends State<EditSalespersonScreen> {
                     validator: (v) {
                       if (v!.isEmpty) return 'Campo obrigatório';
                       if (!v.contains('@')) return 'E-mail inválido';
+                      return null;
+                    },
+                    enabled: !_isEditing, // E-mail não pode ser editado
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _commissionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Comissão (%)',
+                      hintText: 'Ex: 10',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v!.isEmpty) return 'Campo obrigatório';
+                      final commission = double.tryParse(v);
+                      if (commission == null || commission < 0 || commission > 100) {
+                        return 'A comissão deve ser um número entre 0 e 100';
+                      }
                       return null;
                     },
                   ),
