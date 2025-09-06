@@ -21,6 +21,7 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
   Set<Polyline> _polylines = {};
 
   final Completer<GoogleMapController> _mapController = Completer();
+  final _urnCodeController = TextEditingController();
 
   static const CameraPosition _kDefaultPosition = CameraPosition(
     target: LatLng(-23.55052, -46.633308),
@@ -38,136 +39,16 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
       await _getCurrentLocation(animate: false);
       await _loadUrnsAndRoute();
     } on PlatformException catch (e) {
-      if (e.code == 'MissingPluginException') {
-        _errorMessage = "Erro: Recurso de localização não disponível. Verifique as dependências e a plataforma.";
-      } else {
-        _errorMessage = e.message;
-      }
-      if (mounted) setState(() {});
-    } catch (e) {
-      _errorMessage = e.toString().replaceAll('Exception: ', '');
-      if (mounted) setState(() {});
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _getCurrentLocation({bool animate = true}) async {
-    if (mounted) setState(() => _isLoading = true);
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception("Serviços de localização estão desativados.");
-      }
-
-      final permission = await _handleLocationPermission();
-      if (!permission) {
-        throw Exception("Permissão de localização negada.");
-      }
-      
-      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      
-      if (mounted) setState(() => _currentPosition = position);
-
-      if (animate) {
-        final GoogleMapController controller = await _mapController.future;
-        controller.animateCamera(CameraUpdate.newCameraPosition(CameraPosition(
-          target: LatLng(position.latitude, position.longitude),
-          zoom: 15.0,
-        )));
-      }
-    } on MissingPluginException {
-       if (mounted) _showSnackBar("Erro: Recurso de localização não disponível na web.", isError: true);
-       _errorMessage = "Erro de implementação: Recurso de localização não disponível. Verifique as dependências.";
-       if (mounted) setState(() {});
-    } catch (e) {
-      if (mounted) _showSnackBar("Erro ao obter localização: ${e.toString()}", isError: true);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  /// Carrega todas as urnas do Firestore e as exibe no mapa.
-  /// Apenas para usuários Super Admin, que têm permissão de leitura total na coleção 'urns'.
-  Future<void> _loadUrnsAndRoute() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception("Usuário não autenticado.");
-      }
-
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final userData = userDoc.data();
-
-      if (userData?['role'] != 'super_admin') {
-        _errorMessage = "Acesso Negado: Apenas administradores podem visualizar a rota de coleta.";
-        if (mounted) setState(() {});
-        return;
-      }
-
-      // Consulta simplificada para buscar todas as urnas
-      final urnsSnapshot = await FirebaseFirestore.instance.collection('urns').get();
-      final Set<Marker> markers = {};
-      
-      // DIAGNÓSTICO: Imprime o número de documentos encontrados
-      print('>>> Coletando dados do Firestore: ${urnsSnapshot.docs.length} urnas encontradas.');
-
-      for (var urnDoc in urnsSnapshot.docs) {
-        final urnData = urnDoc.data();
-        
-        // Assegura que o documento possui as informações necessárias
-        if (urnData.containsKey('location') && urnData['location'] is GeoPoint) {
-            final GeoPoint location = urnData['location'];
-            final LatLng urnLatLng = LatLng(location.latitude, location.longitude);
-            
-            final String status = urnData['status'] ?? 'Desconhecido';
-            BitmapDescriptor markerColor;
-            
-            // Define a cor do marcador com base no status
-            if (status == 'Cheia') {
-              markerColor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-            } else {
-              markerColor = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-            }
-
-            markers.add(Marker(
-              markerId: MarkerId(urnDoc.id),
-              position: urnLatLng,
-              icon: markerColor,
-              infoWindow: InfoWindow(
-                title: urnData['urnCode'] ?? 'Código indisponível',
-                snippet: 'Status: $status | Local: ${urnData['assignedToName']}',
-              ),
-            ));
-        }
-      }
-      
       if (mounted) {
-        setState(() {
-          _markers = markers;
-        });
+        _showSnackBar("Erro de plataforma ao obter localização: ${e.message}", isError: true);
+        setState(() => _isLoading = false);
       }
     } catch (e) {
-      if (mounted) _showSnackBar("Erro ao carregar as urnas: ${e.toString()}", isError: true);
-    }
-  }
-  
-  Future<bool> _handleLocationPermission() async {
-    LocationPermission permission;
-    
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        _showSnackBar('Permissão de localização negada.', isError: true);
-        return false;
+      if (mounted) {
+        _showSnackBar("Erro ao inicializar a tela: $e", isError: true);
+        setState(() => _isLoading = false);
       }
     }
-    if (permission == LocationPermission.deniedForever) {
-      _showSnackBar('Permissão negada permanentemente. Abra as configurações do app.', isError: true);
-      return false;
-    }
-    return true;
   }
 
   void _showSnackBar(String message, {bool isError = true}) {
@@ -178,23 +59,212 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
     }
   }
 
+  Future<Position?> _getCurrentLocation({bool animate = true}) async {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        _showSnackBar("Serviços de localização desativados.", isError: true);
+        return null;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _showSnackBar("Permissão de localização negada.", isError: true);
+          return null;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        _showSnackBar("Permissão de localização negada permanentemente.", isError: true);
+        return null;
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      setState(() => _currentPosition = position);
+      
+      if (animate && _mapController.isCompleted) {
+        final controller = await _mapController.future;
+        await controller.animateCamera(CameraUpdate.newLatLng(
+          LatLng(position.latitude, position.longitude),
+        ));
+      }
+      return position;
+    } catch (e) {
+      _showSnackBar("Erro ao obter a localização atual: $e", isError: true);
+      return null;
+    }
+  }
+
+  Future<void> _loadUrnsAndRoute() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception("Usuário não autenticado.");
+      }
+
+      // **Correção principal:** Verifique o tipo de perfil do usuário para decidir a consulta.
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final profileType = userDoc.data()?['profileType'];
+
+      QuerySnapshot urnsSnapshot;
+      if (profileType == 'admin') {
+        // Se for admin, mostre todas as urnas.
+        urnsSnapshot = await FirebaseFirestore.instance.collection('urns').get();
+      } else {
+        // Se for colaborador ou outro, mostre apenas as urnas atribuídas a ele.
+        urnsSnapshot = await FirebaseFirestore.instance
+            .collection('urns')
+            .where('assignedToId', isEqualTo: user.uid)
+            .get();
+      }
+
+      final newMarkers = <Marker>{};
+      final urnLocations = <LatLng>[];
+
+      for (var doc in urnsSnapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        if (data['location'] != null && data['location']['lat'] != null && data['location']['lng'] != null) {
+          final latLng = LatLng(
+            data['location']['lat'],
+            data['location']['lng'],
+          );
+          urnLocations.add(latLng);
+
+          final marker = Marker(
+            markerId: MarkerId(doc.id),
+            position: latLng,
+            infoWindow: InfoWindow(
+              title: 'Urna: ${data['urnCode'] ?? 'N/A'}',
+              snippet: 'Status: ${data['status'] ?? 'N/A'}',
+            ),
+            icon: data['status'] == 'Cheia'
+                ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed)
+                : BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          );
+          newMarkers.add(marker);
+        }
+      }
+      
+      if (_currentPosition != null) {
+        final currentPositionLatLng = LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
+        newMarkers.add(
+          Marker(
+            markerId: const MarkerId('my_location'),
+            position: currentPositionLatLng,
+            infoWindow: const InfoWindow(title: 'Sua Localização'),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          ),
+        );
+      }
+
+      setState(() {
+        _markers = newMarkers;
+      });
+
+    } catch (e) {
+      _showSnackBar("Erro ao carregar as urnas: $e", isError: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showAddUrnDialog() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text("Adicionar Nova Urna"),
+          content: TextField(
+            controller: _urnCodeController,
+            decoration: const InputDecoration(labelText: 'Código da Urna'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Cancelar"),
+            ),
+            TextButton(
+              onPressed: _addUrn,
+              child: const Text("Adicionar"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _addUrn() async {
+    final code = _urnCodeController.text.trim();
+    if (code.isEmpty) {
+      Navigator.of(context).pop();
+      _showSnackBar("O código da urna não pode ser vazio.", isError: true);
+      return;
+    }
+
+    Navigator.of(context).pop();
+    _showSnackBar("Adicionando urna...", isError: false);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw Exception("Usuário não autenticado.");
+      }
+
+      final position = await _getCurrentLocation(animate: false);
+      if (position == null) {
+        _showSnackBar("Não foi possível obter a localização para adicionar a urna.", isError: true);
+        return;
+      }
+
+      // **Lógica para adicionar a nova urna ao Firestore**
+      await FirebaseFirestore.instance.collection('urns').add({
+        'urnCode': code,
+        'location': {
+          'lat': position.latitude,
+          'lng': position.longitude,
+        },
+        'status': 'Vazia', // Status inicial
+        'assignedToId': user.uid, // Atribui a urna ao usuário atual
+        'assignedToName': user.displayName ?? 'N/A', // Nome do usuário
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      _urnCodeController.clear();
+      _showSnackBar("Urna '$code' adicionada com sucesso!", isError: false);
+      await _loadUrnsAndRoute(); // Recarrega o mapa para mostrar a nova urna.
+    } catch (e) {
+      _showSnackBar("Erro ao adicionar a urna: $e", isError: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Rota de Coleta'),
+        title: const Text('Rastreamento de Urnas'),
       ),
       body: Stack(
         children: [
           GoogleMap(
+            mapType: MapType.normal,
+            initialCameraPosition: _kDefaultPosition,
             onMapCreated: (GoogleMapController controller) {
               if (!_mapController.isCompleted) {
                 _mapController.complete(controller);
               }
             },
-            initialCameraPosition: _currentPosition != null
-                ? CameraPosition(target: LatLng(_currentPosition!.latitude, _currentPosition!.longitude), zoom: 14)
-                : _kDefaultPosition,
             markers: _markers,
             polylines: _polylines,
             myLocationEnabled: true,
@@ -219,7 +289,7 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           FloatingActionButton(
-            onPressed: _isLoading ? null : () { /* Lógica para adicionar urna */ },
+            onPressed: _isLoading ? null : _showAddUrnDialog,
             tooltip: 'Adicionar Urna',
             heroTag: 'addUrn',
             child: const Icon(Icons.add),

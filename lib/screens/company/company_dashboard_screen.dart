@@ -62,8 +62,6 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
       if (user != null && user.providerData.any((info) => info.providerId == 'google.com')) {
         await GoogleSignIn().signOut();
       }
-      // A operação de escrita (se houver) deve vir ANTES do signOut.
-      // Ex: await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({'lastSeen': Timestamp.now()});
       await FirebaseAuth.instance.signOut();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
@@ -108,7 +106,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 5,
+      length: 4, // Removida a aba de registro de coleta
       child: Scaffold(
         appBar: AppBar(
           title: Text(_companyName ?? "Painel da Empresa"),
@@ -124,9 +122,8 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
             tabs: [
               Tab(icon: Icon(Icons.dashboard), text: "Painel"),
               Tab(icon: Icon(Icons.people), text: "Colaboradores"),
-              Tab(icon: Icon(Icons.add_task), text: "Registrar Coleta"),
               Tab(icon: Icon(Icons.inventory_2_outlined), text: "Urnas"),
-              Tab(icon: Icon(Icons.campaign), text: "Campanhas"),
+              Tab(icon: Icon(Icons.campaign), text: "Prêmios"),
             ],
           ),
         ),
@@ -140,7 +137,6 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
                         children: [
                           CompanyDashboardView(companyId: _companyId!),
                           CompanyCollaboratorsView(companyId: _companyId!),
-                          CompanyRegisterCollectionView(companyId: _companyId!),
                           UrnStatusView(assignedToId: _companyId!),
                           CompanyCampaignsView(companyId: _companyId!),
                         ],
@@ -150,7 +146,8 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   }
 }
 
-// 1. WIDGET PARA O PAINEL PRINCIPAL (MÉTRICAS)
+// WIDGETS AUXILIARES PARA CADA ABA
+
 class CompanyDashboardView extends StatelessWidget {
   final String companyId;
   const CompanyDashboardView({super.key, required this.companyId});
@@ -209,7 +206,6 @@ class CompanyDashboardView extends StatelessWidget {
   }
 }
 
-// 2. WIDGET PARA LISTAR COLABORADORES
 class CompanyCollaboratorsView extends StatelessWidget {
   final String companyId;
   const CompanyCollaboratorsView({super.key, required this.companyId});
@@ -242,89 +238,6 @@ class CompanyCollaboratorsView extends StatelessWidget {
   }
 }
 
-// 3. WIDGET PARA REGISTRAR COLETA
-class CompanyRegisterCollectionView extends StatefulWidget {
-  final String companyId;
-  const CompanyRegisterCollectionView({super.key, required this.companyId});
-
-  @override
-  State<CompanyRegisterCollectionView> createState() => _CompanyRegisterCollectionViewState();
-}
-
-class _CompanyRegisterCollectionViewState extends State<CompanyRegisterCollectionView> {
-  final _formKey = GlobalKey<FormState>();
-  final _weightController = TextEditingController();
-  bool _isRegistering = false;
-
-  Future<void> _registerCollection() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isRegistering = true);
-
-    try {
-      final weightToAdd = double.parse(_weightController.text.replaceAll(',', '.'));
-      final companyRef = FirebaseFirestore.instance.collection('companies').doc(widget.companyId);
-      
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        transaction.update(companyRef, {'totalCollectedKg': FieldValue.increment(weightToAdd)});
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Coleta registrada com sucesso!"), backgroundColor: Colors.green));
-      _weightController.clear();
-      FocusScope.of(context).unfocus(); // Oculta o teclado após o registro
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao registrar: ${e.toString()}"), backgroundColor: Colors.red));
-    } finally {
-      if(mounted) setState(() => _isRegistering = false);
-    }
-  }
-  
-  @override
-  void dispose() {
-    _weightController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text("Registrar Nova Coleta", style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _weightController,
-                  decoration: const InputDecoration(labelText: 'Peso Arrecadado (kg)', hintText: 'Ex: 21,5'),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) return 'Insira o peso.';
-                    if (double.tryParse(value.replaceAll(',', '.')) == null) return 'Insira um número válido.';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton.icon(
-                  onPressed: _isRegistering ? null : _registerCollection,
-                  icon: const Icon(Icons.add_task),
-                  label: const Text("Registrar Coleta"),
-                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                )
-              ],
-            ),
-          ),
-        ),
-        if (_isRegistering) Container(color: Colors.black.withOpacity(0.5), child: const Center(child: CircularProgressIndicator()))
-      ],
-    );
-  }
-}
-
-// 4. WIDGET PARA GESTÃO DE URNAS
 class UrnStatusView extends StatelessWidget {
   final String assignedToId;
   const UrnStatusView({super.key, required this.assignedToId});
@@ -386,20 +299,20 @@ class UrnStatusView extends StatelessWidget {
   }
 }
 
-// 5. WIDGET PARA VISUALIZAR CAMPANHAS
 class CompanyCampaignsView extends StatelessWidget {
   final String companyId;
   const CompanyCampaignsView({super.key, required this.companyId});
 
   @override
   Widget build(BuildContext context) {
-    // Por enquanto, vamos assumir que a empresa vê todas as campanhas globais.
-    // No futuro, podemos criar uma subcoleção em 'companies' para vincular campanhas específicas.
+    // A lógica será atualizada para buscar apenas prêmios associados a esta empresa
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('campaigns').where('isActive', isEqualTo: true).snapshots(),
+      stream: FirebaseFirestore.instance.collection('campaigns')
+          .where('associatedCompanyIds', arrayContains: companyId)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhuma campanha ativa no momento."));
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhum prêmio disponível para esta empresa."));
 
         final campaigns = snapshot.data!.docs;
         return ListView.builder(
@@ -409,12 +322,9 @@ class CompanyCampaignsView extends StatelessWidget {
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: ListTile(
-                title: Text(data['campaignName'] ?? 'Campanha sem nome'),
-                subtitle: Text("Meta: ${data['goalKg'] ?? 'N/A'} kg"),
+                title: Text(data['prizeName'] ?? 'Prêmio sem nome'),
+                subtitle: Text(data['prizeDescription'] ?? ''),
                 trailing: const Icon(Icons.arrow_forward_ios),
-                onTap: () {
-                  // No futuro, podemos navegar para uma tela de detalhes da campanha
-                },
               ),
             );
           },

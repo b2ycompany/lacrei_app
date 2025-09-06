@@ -1,12 +1,21 @@
 // lib/screens/admin/campaign_management_screen.dart
-import 'dart:io';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+
+// Modelos de dados para os dropdowns
+class School {
+  final String id;
+  final String name;
+  School({required this.id, required this.name});
+}
+
+class Company {
+  final String id;
+  final String name;
+  Company({required this.id, required this.name});
+}
+
 
 class CampaignManagementScreen extends StatefulWidget {
   const CampaignManagementScreen({super.key});
@@ -17,31 +26,16 @@ class CampaignManagementScreen extends StatefulWidget {
 
 class _CampaignManagementScreenState extends State<CampaignManagementScreen> {
   
-  String _getCampaignStatus(Timestamp start, Timestamp end) {
-    final now = Timestamp.now();
-    if (now.compareTo(start) >= 0 && now.compareTo(end) <= 0) {
-      return 'Ativa';
-    } else if (now.compareTo(end) > 0) {
-      return 'Finalizada';
-    } else {
-      return 'Agendada';
-    }
+  void _deleteCampaign(String docId) async {
+    // Adicionar aqui a lógica para desassociar das escolas/empresas se necessário
+    await FirebaseFirestore.instance.collection('campaigns').doc(docId).delete();
   }
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Ativa': return Colors.green;
-      case 'Finalizada': return Colors.grey;
-      case 'Agendada': return Colors.blue;
-      default: return Colors.black;
-    }
-  }
-
-  void _navigateToCampaignForm({DocumentSnapshot? campaign}) {
+  void _navigateToPrizeForm({DocumentSnapshot? prize}) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddEditCampaignScreen(campaign: campaign),
+        builder: (context) => AddEditPrizeScreen(prize: prize),
       ),
     );
   }
@@ -49,51 +43,38 @@ class _CampaignManagementScreenState extends State<CampaignManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Gerenciar Campanhas")),
+      appBar: AppBar(title: const Text("Gerenciar Prêmios")),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _navigateToCampaignForm(),
-        tooltip: 'Nova Campanha',
+        onPressed: () => _navigateToPrizeForm(),
+        tooltip: 'Novo Prêmio',
         child: const Icon(Icons.add),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('campaigns').orderBy('startDate', descending: true).snapshots(),
+        stream: FirebaseFirestore.instance.collection('campaigns').orderBy('prizeName').snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text("Erro ao carregar campanhas."));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("Nenhuma campanha criada.\nClique no botão '+' para adicionar uma."));
-          }
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) return const Center(child: Text("Erro ao carregar prêmios."));
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("Nenhum prêmio criado."));
           
-          final campaigns = snapshot.data!.docs;
+          final prizes = snapshot.data!.docs;
 
           return ListView.builder(
-            padding: const EdgeInsets.only(bottom: 80), 
-            itemCount: campaigns.length,
+            padding: const EdgeInsets.only(bottom: 80),
+            itemCount: prizes.length,
             itemBuilder: (context, index) {
-              final campaign = campaigns[index];
-              final data = campaign.data() as Map<String, dynamic>;
+              final prize = prizes[index];
+              final data = prize.data() as Map<String, dynamic>;
               
-              final startDate = data['startDate'] as Timestamp? ?? Timestamp.now();
-              final endDate = data['endDate'] as Timestamp? ?? Timestamp.now();
-              final status = _getCampaignStatus(startDate, endDate);
-              
-              final campaignName = data['name'] ?? 'Campanha sem nome';
-              final goalKg = data['goalKg']?.toString() ?? 'N/A';
-
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: ListTile(
-                  title: Text(campaignName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("Meta: $goalKg kg | Prazo: ${DateFormat('dd/MM/yy').format(startDate.toDate())} a ${DateFormat('dd/MM/yy').format(endDate.toDate())}"),
-                  trailing: Chip(
-                    label: Text(status, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    backgroundColor: _getStatusColor(status),
+                  title: Text(data['prizeName'] ?? 'Prêmio sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('Associado a: ${(data['associationType'] ?? 'N/A').toString().toUpperCase()}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    onPressed: () => _deleteCampaign(prize.id),
                   ),
-                  onTap: () => _navigateToCampaignForm(campaign: campaign),
+                  onTap: () => _navigateToPrizeForm(prize: prize),
                 ),
               );
             },
@@ -104,268 +85,185 @@ class _CampaignManagementScreenState extends State<CampaignManagementScreen> {
   }
 }
 
-class AddEditCampaignScreen extends StatefulWidget {
-  final DocumentSnapshot? campaign;
-
-  const AddEditCampaignScreen({super.key, this.campaign});
+// Tela de Formulário para Adicionar/Editar Prêmios
+class AddEditPrizeScreen extends StatefulWidget {
+  final DocumentSnapshot? prize;
+  const AddEditPrizeScreen({super.key, this.prize});
 
   @override
-  State<AddEditCampaignScreen> createState() => _AddEditCampaignScreenState();
+  State<AddEditPrizeScreen> createState() => _AddEditPrizeScreenState();
 }
 
-class _AddEditCampaignScreenState extends State<AddEditCampaignScreen> {
+class _AddEditPrizeScreenState extends State<AddEditPrizeScreen> {
   final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameController;
-  late TextEditingController _goalController;
-  late TextEditingController _prizeNameController;
-  late TextEditingController _prizeDescriptionController;
-  late TextEditingController _prizeDiscountController;
+  final _prizeNameController = TextEditingController();
   
-  DateTime? _startDate;
-  DateTime? _endDate;
+  bool _isLoading = true;
+  bool get _isEditing => widget.prize != null;
 
-  final List<XFile> _newImageFiles = [];
-  final List<String> _existingImageUrls = [];
-  bool _isLoading = false;
-
-  List<DocumentSnapshot> _allSchools = [];
-  final Map<String, bool> _selectedSchools = {};
-  List<String> _initialAssociatedSchoolIds = []; 
-
-  String _prizeEligibilityRule = 'all'; 
-  final Map<String, bool> _prizeEligibleSchools = {};
-
+  String _associationType = 'schools'; // 'schools' ou 'companies'
+  
+  List<School> _allSchools = [];
+  List<Company> _allCompanies = [];
+  
+  Map<String, bool> _selectedSchools = {};
+  Map<String, bool> _selectedCompanies = {};
+  
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController();
-    _goalController = TextEditingController();
-    _prizeNameController = TextEditingController();
-    _prizeDescriptionController = TextEditingController();
-    _prizeDiscountController = TextEditingController();
     _loadInitialData();
   }
-  
+
   Future<void> _loadInitialData() async {
-    setState(() => _isLoading = true);
-    await _fetchSchools();
-    if (widget.campaign != null) {
+    await _fetchEntities();
+    if (_isEditing) {
       _populateFormForEditing();
     }
     setState(() => _isLoading = false);
   }
 
-  Future<void> _fetchSchools() async {
+  Future<void> _fetchEntities() async {
     final schoolsSnapshot = await FirebaseFirestore.instance.collection('schools').orderBy('schoolName').get();
-    _allSchools = schoolsSnapshot.docs;
-    for (var school in _allSchools) {
-      _selectedSchools[school.id] = false;
-    }
+    _allSchools = schoolsSnapshot.docs.map((doc) => School(id: doc.id, name: doc.data()['schoolName'])).toList();
+    _allSchools.forEach((school) => _selectedSchools[school.id] = false);
+
+    final companiesSnapshot = await FirebaseFirestore.instance.collection('companies').orderBy('companyName').get();
+    _allCompanies = companiesSnapshot.docs.map((doc) => Company(id: doc.id, name: doc.data()['companyName'])).toList();
+    _allCompanies.forEach((company) => _selectedCompanies[company.id] = false);
   }
-  
+
   void _populateFormForEditing() {
-    final data = widget.campaign!.data() as Map<String, dynamic>?;
-    _nameController.text = data?['name'] as String? ?? '';
-    _goalController.text = (data?['goalKg'] as num?)?.toString() ?? '';
-    _prizeNameController.text = data?['prizeName'] as String? ?? '';
-    _prizeDescriptionController.text = data?['prizeDescription'] as String? ?? '';
-    _prizeDiscountController.text = (data?['prizeDiscount'] as num?)?.toString() ?? '';
-    _startDate = (data?['startDate'] as Timestamp?)?.toDate();
-    _endDate = (data?['endDate'] as Timestamp?)?.toDate();
-    if (data?['imageUrls'] != null) {
-      _existingImageUrls.addAll(List<String>.from(data!['imageUrls']));
-    }
+    final data = widget.prize!.data() as Map<String, dynamic>;
+    _prizeNameController.text = data['prizeName'] ?? '';
+    _associationType = data['associationType'] ?? 'schools';
 
-    _initialAssociatedSchoolIds = List<String>.from(data?['associatedSchoolIds'] ?? []);
-    for (var schoolId in _initialAssociatedSchoolIds) {
-      _selectedSchools[schoolId] = true;
+    if (_associationType == 'schools' && data['associatedSchoolIds'] != null) {
+      List<String>.from(data['associatedSchoolIds']).forEach((id) => _selectedSchools[id] = true);
     }
-
-    _prizeEligibilityRule = data?['prizeEligibilityRule'] as String? ?? 'all';
-    final List<String> eligibleIds = List<String>.from(data?['prizeEligibleSchoolIds'] ?? []);
-    for (var schoolId in eligibleIds) {
-      _prizeEligibleSchools[schoolId] = true;
+    if (_associationType == 'companies' && data['associatedCompanyIds'] != null) {
+      List<String>.from(data['associatedCompanyIds']).forEach((id) => _selectedCompanies[id] = true);
     }
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();_goalController.dispose();_prizeNameController.dispose();
-    _prizeDescriptionController.dispose();_prizeDiscountController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickImages() async {
-    final pickedFiles = await ImagePicker().pickMultiImage(imageQuality: 80);
-    if (pickedFiles.isNotEmpty) {
-      setState(() { _newImageFiles.addAll(pickedFiles); });
-    }
-  }
-
-  void _applySchoolFilter(String filter) {
-    setState(() {
-      _selectedSchools.forEach((schoolId, isSelected) {
-        if (filter == 'all') { _selectedSchools[schoolId] = true; } 
-        else if (filter == 'none') { _selectedSchools[schoolId] = false; } 
-        else {
-          final schoolDoc = _allSchools.firstWhere((doc) => doc.id == schoolId);
-          final schoolType = (schoolDoc.data() as Map<String, dynamic>)['schoolType'];
-          _selectedSchools[schoolId] = (schoolType == filter);
-        }
-      });
-    });
-  }
-  
-  Future<void> _saveCampaign() async {
-    if (!_formKey.currentState!.validate() || _startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Preencha todos os campos e selecione as datas.")));
-      return;
-    }
+  Future<void> _savePrize() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
+
     try {
-      final List<String> imageUrls = List.from(_existingImageUrls);
-      final campaignId = widget.campaign?.id ?? FirebaseFirestore.instance.collection('campaigns').doc().id;
-      for (final imageFile in _newImageFiles) {
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
-        final ref = FirebaseStorage.instance.ref('campaign_images/$campaignId/$fileName');
-        if (kIsWeb) { await ref.putData(await imageFile.readAsBytes()); } 
-        else { await ref.putFile(File(imageFile.path)); }
-        imageUrls.add(await ref.getDownloadURL());
-      }
-      final List<String> selectedSchoolIds = _selectedSchools.entries.where((e) => e.value).map((e) => e.key).toList();
-      final List<String> prizeEligibleSchoolIds = _prizeEligibilityRule == 'specific' ? _prizeEligibleSchools.entries.where((e) => e.value).map((e) => e.key).toList() : [];
-      final campaignData = {
-        'name': _nameController.text.trim(), 'goalKg': double.tryParse(_goalController.text) ?? 0,
-        'prizeName': _prizeNameController.text.trim(), 'prizeDescription': _prizeDescriptionController.text.trim(),
-        'prizeDiscount': int.tryParse(_prizeDiscountController.text) ?? 0,
-        'startDate': Timestamp.fromDate(_startDate!), 'endDate': Timestamp.fromDate(_endDate!),
-        'imageUrls': imageUrls, 'associatedSchoolIds': selectedSchoolIds,
-        'prizeEligibilityRule': _prizeEligibilityRule, 'prizeEligibleSchoolIds': prizeEligibleSchoolIds,
+      final List<String> associatedSchoolIds = _associationType == 'schools'
+          ? _selectedSchools.entries.where((e) => e.value).map((e) => e.key).toList()
+          : [];
+      final List<String> associatedCompanyIds = _associationType == 'companies'
+          ? _selectedCompanies.entries.where((e) => e.value).map((e) => e.key).toList()
+          : [];
+      
+      final prizeData = {
+        'prizeName': _prizeNameController.text.trim(),
+        'associationType': _associationType,
+        'associatedSchoolIds': associatedSchoolIds,
+        'associatedCompanyIds': associatedCompanyIds,
+        // O campo 'meta' não é mais salvo
       };
-      await FirebaseFirestore.instance.collection('campaigns').doc(campaignId).set(campaignData, SetOptions(merge: true));
-      final schoolCampaignData = Map<String, dynamic>.from(campaignData)..remove('associatedSchoolIds');
-      schoolCampaignData['status'] = 'pending_approval';
-      schoolCampaignData['collectedKg'] = 0;
-      final schoolsToAdd = selectedSchoolIds.where((id) => !_initialAssociatedSchoolIds.contains(id)).toList();
-      final schoolsToRemove = _initialAssociatedSchoolIds.where((id) => !selectedSchoolIds.contains(id)).toList();
-      final batch = FirebaseFirestore.instance.batch();
-      for (final schoolId in schoolsToAdd) {
-        final ref = FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('activeCampaigns').doc(campaignId);
-        batch.set(ref, schoolCampaignData);
+
+      if (_isEditing) {
+        await FirebaseFirestore.instance.collection('campaigns').doc(widget.prize!.id).update(prizeData);
+      } else {
+        await FirebaseFirestore.instance.collection('campaigns').add(prizeData);
       }
-      for (final schoolId in schoolsToRemove) {
-        final ref = FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('activeCampaigns').doc(campaignId);
-        batch.delete(ref);
-      }
-      await batch.commit();
+      
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Campanha salva e associada com sucesso!"), backgroundColor: Colors.green));
-        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Prêmio salvo com sucesso!"), backgroundColor: Colors.green));
+        Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar campanha: $e"), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar: ${e.toString()}"), backgroundColor: Colors.red));
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if(mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentlySelectedSchools = _allSchools.where((s) => _selectedSchools[s.id] == true).toList();
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.campaign != null ? 'Editar Campanha' : 'Nova Campanha'),
-        actions: [ IconButton(icon: const Icon(Icons.save), onPressed: _isLoading ? null : _saveCampaign) ],
+        title: Text(_isEditing ? 'Editar Prêmio' : 'Novo Prêmio'),
+        actions: [ IconButton(icon: const Icon(Icons.save), onPressed: _isLoading ? null : _savePrize) ],
       ),
-      body: _isLoading ? const Center(child: CircularProgressIndicator()) : Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nome da Campanha'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _goalController, decoration: const InputDecoration(labelText: 'Meta (kg)'), keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _prizeNameController, decoration: const InputDecoration(labelText: 'Nome do Prêmio'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _prizeDescriptionController, decoration: const InputDecoration(labelText: 'Descrição do Prêmio'), maxLines: 3, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
-              const SizedBox(height: 16),
-              TextFormField(controller: _prizeDiscountController, decoration: const InputDecoration(labelText: 'Desconto da Premiação (%)', hintText: 'Ex: 30'), keyboardType: TextInputType.number),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(child: InkWell(onTap: () async { final date = await showDatePicker(context: context, initialDate: _startDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2030)); if (date != null) setState(() => _startDate = date); }, child: InputDecorator(decoration: const InputDecoration(labelText: 'Data de Início'), child: Text(_startDate != null ? DateFormat('dd/MM/yyyy').format(_startDate!) : 'Selecionar')))),
-                  const SizedBox(width: 16),
-                  Expanded(child: InkWell(onTap: () async { final date = await showDatePicker(context: context, initialDate: _endDate ?? _startDate ?? DateTime.now(), firstDate: _startDate ?? DateTime.now(), lastDate: DateTime(2030)); if (date != null) setState(() => _endDate = date); }, child: InputDecorator(decoration: const InputDecoration(labelText: 'Data de Fim'), child: Text(_endDate != null ? DateFormat('dd/MM/yyyy').format(_endDate!) : 'Selecionar')))),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text("Imagens da Campanha", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8, runSpacing: 8,
-                children: [
-                  ..._existingImageUrls.map((url) => Stack(children: [ Image.network(url, width: 100, height: 100, fit: BoxFit.cover), Positioned(right: 0, top: 0, child: IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () => setState(() => _existingImageUrls.remove(url))))])),
-                  ..._newImageFiles.map((file) => Stack(children: [ if (kIsWeb) Image.network(file.path, width: 100, height: 100, fit: BoxFit.cover) else Image.file(File(file.path), width: 100, height: 100, fit: BoxFit.cover), Positioned(right: 0, top: 0, child: IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: () => setState(() => _newImageFiles.remove(file))))])),
-                  GestureDetector(onTap: _pickImages, child: Container(width: 100, height: 100, color: Colors.grey[800], child: const Icon(Icons.add_a_photo, size: 40)))
-                ],
-              ),
-              const SizedBox(height: 24),
-              Text("Associar Campanha a Escolas", style: Theme.of(context).textTheme.titleMedium),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Wrap(
-                  spacing: 8.0,
-                  children: [
-                    ActionChip(label: const Text("Todas"), onPressed: () => _applySchoolFilter('all')),
-                    ActionChip(label: const Text("Nenhuma"), onPressed: () => _applySchoolFilter('none')),
-                    ActionChip(label: const Text("Públicas"), onPressed: () => _applySchoolFilter('publica')),
-                    ActionChip(label: const Text("Particulares"), onPressed: () => _applySchoolFilter('particular')),
+      body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                TextFormField(
+                  controller: _prizeNameController,
+                  decoration: const InputDecoration(labelText: 'Nome do Prêmio'),
+                  validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null,
+                ),
+                const SizedBox(height: 24),
+                const Text("Associar prêmio a:", style: TextStyle(fontSize: 16)),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'schools', label: Text('Escolas')),
+                    ButtonSegment(value: 'companies', label: Text('Empresas')),
                   ],
+                  selected: {_associationType},
+                  onSelectionChanged: (Set<String> newSelection) {
+                    setState(() => _associationType = newSelection.first);
+                  },
                 ),
-              ),
-              _allSchools.isEmpty ? const Center(child: Text("A carregar escolas...")) : Container(
-                height: 200, decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
-                child: ListView(
-                  children: _allSchools.map((schoolDoc) {
-                    final schoolId = schoolDoc.id;
-                    final schoolName = (schoolDoc.data() as Map<String, dynamic>)['schoolName'] ?? 'Escola sem nome';
-                    return CheckboxListTile(
-                      title: Text(schoolName),
-                      value: _selectedSchools[schoolId] ?? false,
-                      onChanged: (bool? value) { setState(() { _selectedSchools[schoolId] = value ?? false; }); },
-                    );
-                  }).toList(),
-                ),
-              ),
-              const Divider(height: 40),
-              Text("Elegibilidade do Prêmio", style: Theme.of(context).textTheme.titleMedium),
-              const Text("Defina quais das escolas selecionadas acima poderão ganhar o prêmio.", style: TextStyle(color: Colors.grey)),
-              RadioListTile<String>(title: const Text("Todas as escolas associadas"), value: 'all', groupValue: _prizeEligibilityRule, onChanged: (v) => setState(() => _prizeEligibilityRule = v!)),
-              RadioListTile<String>(title: const Text("Apenas escolas públicas associadas"), value: 'public', groupValue: _prizeEligibilityRule, onChanged: (v) => setState(() => _prizeEligibilityRule = v!)),
-              RadioListTile<String>(title: const Text("Apenas escolas particulares associadas"), value: 'private', groupValue: _prizeEligibilityRule, onChanged: (v) => setState(() => _prizeEligibilityRule = v!)),
-              RadioListTile<String>(title: const Text("Selecionar escolas específicas"), value: 'specific', groupValue: _prizeEligibilityRule, onChanged: (v) => setState(() => _prizeEligibilityRule = v!)),
-              if (_prizeEligibilityRule == 'specific')
-                Container(
-                  height: 150, decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
-                  child: ListView(
-                    children: currentlySelectedSchools.map((schoolDoc) {
-                      final schoolId = schoolDoc.id;
-                      final schoolName = (schoolDoc.data() as Map<String, dynamic>)['schoolName'];
-                      return CheckboxListTile(
-                        title: Text(schoolName),
-                        value: _prizeEligibleSchools[schoolId] ?? false,
-                        onChanged: (v) => setState(() => _prizeEligibleSchools[schoolId] = v!),
-                      );
-                    }).toList(),
+                const SizedBox(height: 16),
+                if (_associationType == 'schools')
+                  _buildEntitySelector<School>(
+                    title: 'Selecione as Escolas',
+                    allItems: _allSchools,
+                    selectedItems: _selectedSchools,
+                    onChanged: (id, value) => setState(() => _selectedSchools[id] = value),
                   ),
-                ),
-            ],
+                if (_associationType == 'companies')
+                  _buildEntitySelector<Company>(
+                    title: 'Selecione as Empresas',
+                    allItems: _allCompanies,
+                    selectedItems: _selectedCompanies,
+                    onChanged: (id, value) => setState(() => _selectedCompanies[id] = value),
+                  ),
+              ],
+            ),
+          ),
+    );
+  }
+
+  Widget _buildEntitySelector<T>({
+    required String title,
+    required List<T> allItems,
+    required Map<String, bool> selectedItems,
+    required Function(String, bool) onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Container(
+          height: 300,
+          decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
+          child: ListView.builder(
+            itemCount: allItems.length,
+            itemBuilder: (context, index) {
+              final item = allItems[index];
+              final String id = (item as dynamic).id;
+              final String name = (item as dynamic).name;
+              return CheckboxListTile(
+                title: Text(name),
+                value: selectedItems[id] ?? false,
+                onChanged: (bool? value) => onChanged(id, value ?? false),
+              );
+            },
           ),
         ),
-      ),
+      ],
     );
   }
 }

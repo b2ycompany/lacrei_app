@@ -7,7 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lacrei_app/screens/ranking_screen.dart';
 import '../profile_selection_screen.dart';
 
-// Modelo de dados final para a dashboard
+// Modelo de dados atualizado para suportar múltiplos prêmios
 class GamifiedDashboardData {
   final String studentName;
   final String studentImageUrl;
@@ -15,7 +15,7 @@ class GamifiedDashboardData {
   final String schoolId;
   final String schoolName;
   final String luckyNumber;
-  final DocumentSnapshot? activeCampaign;
+  final List<DocumentSnapshot> activeCampaigns; // Alterado para uma lista
 
   GamifiedDashboardData({
     required this.studentName,
@@ -24,7 +24,7 @@ class GamifiedDashboardData {
     required this.schoolId,
     required this.schoolName,
     required this.luckyNumber,
-    this.activeCampaign,
+    required this.activeCampaigns,
   });
 }
 
@@ -43,7 +43,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     _dashboardData = _fetchDashboardData();
   }
 
-  // Lógica de busca de dados final e correta
   Future<GamifiedDashboardData> _fetchDashboardData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("Usuário não logado.");
@@ -55,7 +54,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final schoolId = userData['schoolId'] as String?;
     final schoolLinkStatus = userData['schoolLinkStatus'] as String? ?? 'none';
     final luckyNumber = userData['luckyNumber'] as String? ?? 'N/A';
-    
+
     if (schoolId == null || schoolLinkStatus != 'approved') {
       return GamifiedDashboardData(
         studentName: userData['name'] ?? 'Aluno(a)',
@@ -64,19 +63,17 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         schoolId: '',
         schoolName: '',
         luckyNumber: luckyNumber,
+        activeCampaigns: [], // Lista vazia se não aprovado
       );
     }
 
     final schoolDoc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).get();
     if (!schoolDoc.exists) throw Exception("Escola não encontrada.");
 
-    // Busca a campanha na subcoleção da escola com status 'active'
-    final activeCampaignSnapshot = await FirebaseFirestore.instance
-        .collection('schools')
-        .doc(schoolId)
-        .collection('activeCampaigns')
-        .where('status', isEqualTo: 'active')
-        .limit(1)
+    // --- CORREÇÃO (Item #1): Busca TODAS as campanhas/prêmios ativos, não apenas 1 ---
+    final activeCampaignsSnapshot = await FirebaseFirestore.instance
+        .collection('campaigns')
+        .where('associatedSchoolIds', arrayContains: schoolId)
         .get();
 
     return GamifiedDashboardData(
@@ -85,7 +82,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       schoolLinkStatus: schoolLinkStatus,
       schoolId: schoolId,
       schoolName: schoolDoc.data()?['schoolName'] ?? 'Nome da Escola',
-      activeCampaign: activeCampaignSnapshot.docs.isNotEmpty ? activeCampaignSnapshot.docs.first : null,
+      activeCampaigns: activeCampaignsSnapshot.docs,
       luckyNumber: luckyNumber,
     );
   }
@@ -111,7 +108,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       }
     }
   }
-  
+
   void _showLogoutConfirmationDialog() {
     showDialog(
       context: context,
@@ -172,9 +169,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             final data = snapshot.data!;
             switch (data.schoolLinkStatus) {
               case 'approved':
-                if (data.activeCampaign == null) {
-                  return _buildNoActiveCampaignScreen(data);
-                }
                 return _buildApprovedDashboard(data);
               case 'pending':
                 return _buildPendingScreen(data);
@@ -189,24 +183,20 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildApprovedDashboard(GamifiedDashboardData data) {
-    final campaignData = data.activeCampaign!.data() as Map<String, dynamic>;
-    final prizeName = campaignData['prizeName'] ?? 'Prêmio incrível!';
-    final prizeDescription = campaignData['prizeDescription'] ?? 'Atinja a meta para desbloquear.';
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Métrica principal da escola
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('schools').doc(data.schoolId).snapshots(),
+            builder: (context, schoolSnapshot) {
+              if (!schoolSnapshot.hasData) return const SizedBox.shrink();
+              final schoolData = schoolSnapshot.data!.data() as Map<String, dynamic>;
+              final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('schools').doc(data.schoolId).snapshots(),
-      builder: (context, schoolSnapshot) {
-        if (!schoolSnapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final schoolData = schoolSnapshot.data!.data() as Map<String, dynamic>;
-        final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
-        final goalKg = (campaignData['goalKg'] as num? ?? 1).toDouble();
-        final percentage = (totalKg / goalKg).clamp(0.0, 1.0);
-
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Card(
+              return Card(
                 elevation: 8,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 child: Container(
@@ -217,77 +207,122 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   ),
                   child: Column(
                     children: [
-                      Text(campaignData['campaignName'] ?? 'Missão Principal', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 8),
-                      Text(data.schoolName, style: TextStyle(fontSize: 16, color: Colors.white.withOpacity(0.8))),
-                      const SizedBox(height: 20),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: LinearProgressIndicator(
-                          value: percentage,
-                          minHeight: 20,
-                          backgroundColor: Colors.purple.shade900.withOpacity(0.5),
-                          valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
-                        ),
-                      ),
+                      Text(data.schoolName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                       const SizedBox(height: 12),
-                      Text("${(percentage * 100).toStringAsFixed(1)}% CONCLUÍDO", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent, letterSpacing: 2)),
-                      Text("${totalKg.toStringAsFixed(1)} / ${goalKg.toStringAsFixed(1)} kg", style: const TextStyle(color: Colors.white70)),
+                      Text("${totalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                      const Text("Total Arrecadado pela Escola", style: TextStyle(color: Colors.white70)),
                     ],
                   ),
                 ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+
+          // Número da Sorte
+          Card(
+            color: const Color.fromARGB(255, 26, 12, 41),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.confirmation_number_outlined, color: Colors.amber, size: 28),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        text: "Seu Nº da Sorte: ",
+                        style: const TextStyle(fontSize: 16),
+                        children: [
+                          TextSpan(
+                            text: data.luckyNumber,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          )
+                        ]
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              Card(
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          const Text("Recompensas Disponíveis", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 16),
+
+          data.activeCampaigns.isEmpty
+              ? const Center(child: Text("Nenhuma recompensa ativa para sua escola no momento."))
+              : ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: data.activeCampaigns.length,
+            itemBuilder: (context, index) {
+              final prizeData = data.activeCampaigns[index].data() as Map<String, dynamic>;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('🏆 RECOMPENSA DA MISSÃO 🏆', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber)),
-                      const SizedBox(height: 12),
-                      Text(prizeName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                      Text(
+                        prizeData['campaignName'] ?? 'Recompensa',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 8),
-                      Text(prizeDescription, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, color: Colors.white70)),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-               Card(
-                color: const Color.fromARGB(255, 26, 12, 41),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.confirmation_number_outlined, color: Colors.amber, size: 28),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: Text.rich(
-                          TextSpan(
-                            text: "Seu Nº da Sorte: ",
-                            style: const TextStyle(fontSize: 16),
+                      Text(
+                        prizeData['prizeDescription'] ?? 'Detalhes não disponíveis.',
+                        style: const TextStyle(fontSize: 14, color: Colors.white70),
+                      ),
+                      const SizedBox(height: 12),
+                      StreamBuilder<DocumentSnapshot>(
+                        stream: FirebaseFirestore.instance.collection('schools').doc(data.schoolId).snapshots(),
+                        builder: (context, schoolSnapshot) {
+                          if (!schoolSnapshot.hasData) return const SizedBox.shrink();
+                          final schoolData = schoolSnapshot.data!.data() as Map<String, dynamic>;
+                          final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
+                          final goalKg = (prizeData['goalKg'] as num? ?? 1).toDouble();
+                          final percentage = (totalKg / goalKg).clamp(0.0, 1.0);
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              TextSpan(
-                                text: data.luckyNumber,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                              )
-                            ]
-                          ),
-                        ),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: LinearProgressIndicator(
+                                  value: percentage,
+                                  minHeight: 15,
+                                  backgroundColor: Colors.purple.shade900.withOpacity(0.5),
+                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                "${(percentage * 100).toStringAsFixed(1)}% CONCLUÍDO",
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent, letterSpacing: 1),
+                              ),
+                              Text(
+                                "${totalKg.toStringAsFixed(1)} / ${goalKg.toStringAsFixed(1)} kg",
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
-        );
-      },
+        ],
+      ),
     );
   }
-  
+
   Widget _buildNoActiveCampaignScreen(GamifiedDashboardData data) {
     return Center(
       child: Padding(
@@ -312,23 +347,23 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   Widget _buildPendingScreen(GamifiedDashboardData data) {
     return Center(child: Padding(padding: const EdgeInsets.all(32.0), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.hourglass_top_rounded, size: 80, color: Colors.amber),
-        const SizedBox(height: 24),
-        Text('Olá, ${data.studentName}!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        const Text('Sua solicitação para entrar na escola foi enviada.\n\nEstamos aguardando a aprovação do administrador. Por favor, aguarde.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.white70, height: 1.5)),
+      const Icon(Icons.hourglass_top_rounded, size: 80, color: Colors.amber),
+      const SizedBox(height: 24),
+      Text('Olá, ${data.studentName}!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 16),
+      const Text('Sua solicitação para entrar na escola foi enviada.\n\nEstamos aguardando a aprovação do administrador. Por favor, aguarde.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.white70, height: 1.5)),
     ])));
   }
-  
+
   Widget _buildNoLinkScreen(GamifiedDashboardData data) {
     return Center(child: Padding(padding: const EdgeInsets.all(32.0), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.school_outlined, size: 80, color: Colors.grey),
-        const SizedBox(height: 24),
-        Text('Olá, ${data.studentName}!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        const Text('Sua solicitação foi rejeitada ou você ainda não está vinculado a uma escola.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.white70, height: 1.5)),
-        const SizedBox(height: 24),
-        ElevatedButton(onPressed: () {}, child: const Text("Escolher Escola")),
+      const Icon(Icons.school_outlined, size: 80, color: Colors.grey),
+      const SizedBox(height: 24),
+      Text('Olá, ${data.studentName}!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 16),
+      const Text('Sua solicitação foi rejeitada ou você ainda não está vinculado a uma escola.', textAlign: TextAlign.center, style: TextStyle(fontSize: 16, color: Colors.white70, height: 1.5)),
+      const SizedBox(height: 24),
+      ElevatedButton(onPressed: () {}, child: const Text("Escolher Escola")),
     ])));
   }
 }
