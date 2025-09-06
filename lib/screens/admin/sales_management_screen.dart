@@ -1,5 +1,8 @@
+// lib/screens/admin/sales_management_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'edit_salesperson_screen.dart';
 
 class SalesManagementScreen extends StatefulWidget {
@@ -25,7 +28,7 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Confirmar Exclusão"),
-        content: const Text("Tem certeza que deseja excluir este vendedor? Esta ação é irreversível e irá remover o perfil do vendedor e o usuário associado."),
+        content: const Text("Tem certeza que deseja excluir este vendedor? A conta de login dele também será apagada permanentemente."),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Excluir", style: TextStyle(color: Colors.red))),
@@ -35,20 +38,17 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
 
     if (confirmed == true) {
       try {
-        final batch = _firestore.batch();
+        final HttpsCallable callable = FirebaseFunctions.instance.httpsCallable('deleteSalesperson');
         
-        // 1. Deleta o documento do vendedor na coleção 'salespeople'
-        batch.delete(_firestore.collection('salespeople').doc(salespersonDoc.id));
+        await callable.call(<String, dynamic>{
+          'uid': salespersonDoc.id,
+        });
 
-        // 2. Busca e deleta o usuário associado na coleção 'users'
-        final userQuery = await _firestore.collection('users').where('salespersonId', isEqualTo: salespersonDoc.id).limit(1).get();
-        if (userQuery.docs.isNotEmpty) {
-          batch.delete(userQuery.docs.first.reference);
-        }
-
-        await batch.commit();
-        _showSnackBar("Vendedor e dados associados excluídos com sucesso!", isError: false);
-      } catch (e) {
+        _showSnackBar("Vendedor excluído com sucesso!", isError: false);
+      } on FirebaseFunctionsException catch (e) {
+        _showSnackBar("Erro da Cloud Function: ${e.message}", isError: true);
+      } 
+      catch (e) {
         _showSnackBar("Erro ao excluir vendedor: $e", isError: true);
       }
     }
@@ -86,11 +86,11 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
 
           final salespeopleDocs = snapshot.data!.docs;
           final totalSalespeople = salespeopleDocs.length;
-          final totalSales = salespeopleDocs.fold<num>(0, (sum, doc) => sum + (doc.data() as Map<String, dynamic>)['salesCount'] ?? 0);
+          // CORREÇÃO: Variável 'sum' renomeada para 'total'
+          final totalSales = salespeopleDocs.fold<num>(0, (total, doc) => total + ((doc.data() as Map<String, dynamic>)['salesCount'] as num? ?? 0));
 
           return Column(
             children: [
-              // Dashboard de métricas
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
@@ -102,7 +102,6 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
                 ),
               ),
               const Divider(),
-              // Lista de vendedores
               Expanded(
                 child: ListView.builder(
                   itemCount: salespeopleDocs.length,
@@ -116,7 +115,7 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
                         leading: const CircleAvatar(child: Icon(Icons.person)),
                         title: Text(data['name'] ?? 'Nome não disponível', style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Text(
-                          "Comissão: ${data['commission']?.toString() ?? 'N/A'}% | Vendas: ${data['salesCount'] ?? 0} | Total: R\$ ${(data['totalSalesValue'] as num? ?? 0).toStringAsFixed(2)}"
+                          "Vendas: ${data['salesCount'] ?? 0} | Total: R\$ ${(data['totalSalesValue'] as num? ?? 0).toStringAsFixed(2)}"
                         ),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
@@ -125,7 +124,7 @@ class _SalesManagementScreenState extends State<SalesManagementScreen> {
                         onTap: () => Navigator.push(
                           context, 
                           MaterialPageRoute(
-                            builder: (context) => EditSalespersonScreen(salespersonId: salespersonDoc.id)
+                            builder: (context) => EditSalespersonScreen(salesperson: salespersonDoc)
                           )
                         ),
                       ),

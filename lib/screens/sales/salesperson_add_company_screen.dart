@@ -3,10 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Import necessário para pegar o usuário logado
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SalespersonAddCompanyScreen extends StatefulWidget {
-  // Não precisamos mais passar o vendedor, pois vamos pegá-lo do usuário logado
   const SalespersonAddCompanyScreen({super.key});
 
   @override
@@ -33,28 +32,36 @@ class _SalespersonAddCompanyScreenState extends State<SalespersonAddCompanyScree
 
   Future<void> _saveCompany() async {
     if (!_formKey.currentState!.validate()) return;
-
+    
     final salespersonId = FirebaseAuth.instance.currentUser?.uid;
     if (salespersonId == null) {
-      _showSnackBar('Erro: Vendedor não autenticado. Por favor, faça login novamente.');
+      _showSnackBar('Erro: Vendedor não autenticado.');
       return;
     }
-
     setState(() => _isLoading = true);
-
-    final companyData = {
-      'companyName': _nameController.text.trim(),
-      'cnpj': _cnpjController.text.trim(),
-      'companyType': _selectedCompanyType,
-      
-      // Lógica automática (Melhores Práticas)
-      'contactedBySalespersonId': salespersonId, // Vincula a empresa ao vendedor logado
-      'sponsorshipStatus': 'Prospect', // Status inicial padrão
-      'sponsorshipPlanId': null, // Plano será definido pelo Super Admin depois
-      'createdAt': FieldValue.serverTimestamp(),
-    };
+    
+    final cnpj = _cnpjController.text.trim();
 
     try {
+      // --- NOVA VERIFICAÇÃO DE CNPJ DUPLICADO ---
+      final query = FirebaseFirestore.instance.collection('companies').where('cnpj', isEqualTo: cnpj).limit(1);
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isNotEmpty) {
+        throw Exception('Já existe uma empresa cadastrada com este CNPJ.');
+      }
+      // --- FIM DA VERIFICAÇÃO ---
+
+      final companyData = {
+        'companyName': _nameController.text.trim(),
+        'cnpj': cnpj,
+        'companyType': _selectedCompanyType,
+        'contactedBySalespersonId': salespersonId,
+        'sponsorshipStatus': 'Prospect',
+        'sponsorshipPlanId': null,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+      
       await FirebaseFirestore.instance.collection('companies').add(companyData);
       
       if (mounted) {
@@ -63,12 +70,10 @@ class _SalespersonAddCompanyScreenState extends State<SalespersonAddCompanyScree
       }
     } catch (e) {
       if (mounted) {
-        _showSnackBar('Erro ao salvar: ${e.toString()}');
+        _showSnackBar('Erro ao salvar: ${e.toString().replaceAll('Exception: ', '')}', isError: true);
       }
     } finally {
-      if(mounted) {
-        setState(() => _isLoading = false);
-      }
+      if(mounted) setState(() => _isLoading = false);
     }
   }
   

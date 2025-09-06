@@ -116,19 +116,31 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
   Future<void> _saveCompany() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-
-    final companyData = {
-      'companyName': _nameController.text.trim(),
-      'cnpj': _cnpjController.text.trim(),
-      'contactedBySalespersonId': _selectedSalesperson?.id,
-      'sponsorshipPlanId': _selectedPlan?.id,
-      'sponsorshipStatus': _selectedStatus,
-      'companyType': _selectedCompanyType,
-      'institutionId': _selectedInstitution?.id, // Salva o ID da instituição
-      if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
-    };
+    
+    final cnpj = _cnpjController.text.trim();
 
     try {
+      // --- NOVA VERIFICAÇÃO DE CNPJ DUPLICADO ---
+      final query = FirebaseFirestore.instance.collection('companies').where('cnpj', isEqualTo: cnpj).limit(1);
+      final snapshot = await query.get();
+
+      // Se encontrou um documento E (não estamos editando OU o ID encontrado é diferente do que estamos editando)
+      if (snapshot.docs.isNotEmpty && (!_isEditing || snapshot.docs.first.id != widget.companyId)) {
+        throw Exception('Já existe uma empresa cadastrada com este CNPJ.');
+      }
+      // --- FIM DA VERIFICAÇÃO ---
+
+      final companyData = {
+        'companyName': _nameController.text.trim(),
+        'cnpj': cnpj,
+        'contactedBySalespersonId': _selectedSalesperson?.id,
+        'sponsorshipPlanId': _selectedPlan?.id,
+        'sponsorshipStatus': _selectedStatus,
+        'companyType': _selectedCompanyType,
+        'institutionId': _selectedInstitution?.id,
+        if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
+      };
+
       if (_isEditing) {
         await FirebaseFirestore.instance.collection('companies').doc(widget.companyId).update(companyData);
       } else {
@@ -141,9 +153,10 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
-        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: Colors.red));
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

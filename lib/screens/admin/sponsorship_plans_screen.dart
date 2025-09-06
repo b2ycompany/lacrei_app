@@ -29,10 +29,10 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
   void _showPlanForm({DocumentSnapshot? plan}) {
     final isEditing = plan != null;
     
-    // Limpa ou preenche os controladores
     if (isEditing) {
       final data = plan.data() as Map<String, dynamic>;
-      _nameController.text = data['name'] ?? '';
+      // CORREÇÃO: Lendo do campo 'planName'
+      _nameController.text = data['planName'] ?? '';
       _priceController.text = (data['price'] as num?)?.toString() ?? '';
       _descriptionController.text = data['description'] ?? '';
     } else {
@@ -65,7 +65,7 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         validator: (v) {
                           if (v!.isEmpty) return "Campo obrigatório";
-                          if (double.tryParse(v) == null) return "Insira um número válido";
+                          if (double.tryParse(v.replaceAll(',', '.')) == null) return "Insira um número válido";
                           return null;
                         },
                       ),
@@ -91,11 +91,11 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
                             setStateInDialog(() => _isSaving = true);
                             await _savePlan(isEditing: isEditing, plan: plan);
                             setStateInDialog(() => _isSaving = false);
-                            Navigator.of(context).pop();
+                            if (mounted) Navigator.of(context).pop();
                           }
                         },
                   child: _isSaving
-                      ? const CircularProgressIndicator()
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 3))
                       : Text(isEditing ? "Salvar" : "Adicionar"),
                 ),
               ],
@@ -109,16 +109,18 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
   Future<void> _savePlan({required bool isEditing, DocumentSnapshot? plan}) async {
     try {
       final data = {
-        'name': _nameController.text.trim(),
+        // CORREÇÃO: Salvando no campo 'planName'
+        'planName': _nameController.text.trim(),
         'price': double.parse(_priceController.text.replaceAll(',', '.')),
         'description': _descriptionController.text.trim(),
       };
 
       if (isEditing) {
-        await FirebaseFirestore.instance.collection('sponsorshipPlans').doc(plan!.id).update(data);
+        // ATENÇÃO: Verifique se o nome da coleção no seu Firestore é 'sponsorship_plans'
+        await FirebaseFirestore.instance.collection('sponsorship_plans').doc(plan!.id).update(data);
         _showSnackBar("Plano atualizado com sucesso!", isError: false);
       } else {
-        await FirebaseFirestore.instance.collection('sponsorshipPlans').add(data);
+        await FirebaseFirestore.instance.collection('sponsorship_plans').add(data);
         _showSnackBar("Novo plano adicionado!", isError: false);
       }
     } catch (e) {
@@ -131,7 +133,8 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Confirmar Exclusão"),
-        content: Text("Tem certeza que deseja excluir o plano de patrocínio '${plan['name']}'?"),
+        // CORREÇÃO: Lendo do campo 'planName'
+        content: Text("Tem certeza que deseja excluir o plano de patrocínio '${plan['planName']}'?"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancelar")),
           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Excluir", style: TextStyle(color: Colors.red))),
@@ -141,7 +144,7 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
 
     if (confirmed == true) {
       try {
-        await FirebaseFirestore.instance.collection('sponsorshipPlans').doc(plan.id).delete();
+        await FirebaseFirestore.instance.collection('sponsorship_plans').doc(plan.id).delete();
         _showSnackBar("Plano excluído com sucesso!", isError: false);
       } catch (e) {
         _showSnackBar("Erro ao excluir plano: $e", isError: true);
@@ -171,7 +174,8 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('sponsorshipPlans').snapshots(),
+        // ATENÇÃO: Verifique se o nome da coleção no seu Firestore é 'sponsorship_plans'
+        stream: FirebaseFirestore.instance.collection('sponsorship_plans').orderBy('price').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -195,7 +199,8 @@ class _SponsorshipPlansScreenState extends State<SponsorshipPlansScreen> {
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: ListTile(
-                  title: Text(data['name'] ?? 'Plano sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  // CORREÇÃO: Lendo do campo 'planName'
+                  title: Text(data['planName'] ?? 'Plano sem nome', style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(data['description'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,

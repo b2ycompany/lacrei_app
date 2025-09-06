@@ -47,8 +47,6 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
 
   String _userType = 'aluno';
   final _positionController = TextEditingController();
-  // --- REMOVIDO: Controlador do campo 'Série / Ano' ---
-  // final _gradeController = TextEditingController(); 
   final _guardianController = TextEditingController();
   bool _showGuardianTerms = false;
   int _calculatedAge = 0;
@@ -99,8 +97,6 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
     _addressStateController.dispose();
     _instagramController.dispose();
     _positionController.dispose();
-    // --- REMOVIDO: Dispose do controlador 'Série / Ano' ---
-    // _gradeController.dispose(); 
     _guardianController.dispose();
     _cepFocusNode.dispose();
     super.dispose();
@@ -130,6 +126,28 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
     }
   }
 
+  // --- NOVA FUNÇÃO PARA GERAR O NÚMERO DA SORTE ---
+  Future<String> _generateUniqueLuckyNumber() async {
+    final random = Random();
+    while (true) {
+      // Gera um número de 6 dígitos (de 100000 a 999999)
+      String luckyNumber = (random.nextInt(900000) + 100000).toString();
+      
+      // Verifica se o número já existe no banco de dados
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('luckyNumber', isEqualTo: luckyNumber)
+          .limit(1)
+          .get();
+
+      // Se não encontrou nenhum documento, o número é único
+      if (querySnapshot.docs.isEmpty) {
+        return luckyNumber;
+      }
+      // Se já existe, o loop continua e gera um novo número
+    }
+  }
+
   Future<void> _registerUser() async {
     setState(() => _isLoading = true);
     User? user; 
@@ -150,7 +168,8 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
       await user.updateDisplayName(studentName);
       if(studentImageUrl != null) await user.updatePhotoURL(studentImageUrl);
       
-      final luckyNumber = '${DateTime.now().millisecondsSinceEpoch}${Random().nextInt(100)}';
+      // --- LÓGICA DO NÚMERO DA SORTE ATUALIZADA ---
+      final luckyNumber = await _generateUniqueLuckyNumber();
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': studentName, 'email': _emailController.text.trim(), 'userImageUrl': studentImageUrl,
@@ -159,7 +178,6 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
         'cep': _cepController.text.trim(), 'address': _addressController.text.trim(), 'createdAt': Timestamp.now(),
         'age': _calculatedAge, 'userType': _userType,
         'educationLevel': _selectedEducationLevel,
-        // --- REMOVIDO: Campo 'grade' não é mais salvo ---
         'position': _userType == 'funcionario' ? _positionController.text.trim() : null,
         'guardianName': _showGuardianTerms ? _guardianController.text.trim() : null,
         'luckyNumber': luckyNumber,
@@ -355,11 +373,6 @@ class _AlunoRegistrationScreenState extends State<AlunoRegistrationScreen> {
 
                     if (_userType == 'funcionario')
                         TextFormField(controller: _positionController, decoration: _buildInputDecoration('Qual o seu Cargo?'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null).animate().fade(),
-                    
-                    // --- REMOVIDO: Campo "Série / Ano" ---
-                    // if (_userType == 'aluno')
-                    //     TextFormField(controller: _gradeController, decoration: _buildInputDecoration('Série / Ano'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null).animate().fade(),
-                    // const SizedBox(height: 16),
                     
                     DropdownButtonFormField<School>(decoration: _buildInputDecoration('Selecione sua Escola/Faculdade'), value: _selectedSchool, items: _schoolsList.map((s) => DropdownMenuItem(value: s, child: Text(s.name, overflow: TextOverflow.ellipsis))).toList(), onChanged: (s) => setState(() => _selectedSchool = s), validator: (value) => value == null ? 'Obrigatório' : null, isExpanded: true),
                     const SizedBox(height: 16),
