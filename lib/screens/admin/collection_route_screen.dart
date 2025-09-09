@@ -18,7 +18,7 @@ class _CollectionRouteScreenState extends State<CollectionRouteScreen> {
   String? _errorMessage;
   Position? _currentPosition;
   Set<Marker> _markers = {};
-  Set<Polyline> _polylines = {};
+  final Set<Polyline> _polylines = {};
 
   final Completer<GoogleMapController> _mapController = Completer();
   final _urnCodeController = TextEditingController();

@@ -6,7 +6,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../profile_selection_screen.dart';
 
-// Modelo de dados para a dashboard, similar ao do aluno
 class CollaboratorDashboardData {
   final String collaboratorName;
   final String companyId;
@@ -59,7 +58,7 @@ class _ColaboradorDashboardScreenState extends State<ColaboradorDashboardScreen>
 
     // Busca todos os prêmios associados a esta empresa
     final activePrizesSnapshot = await FirebaseFirestore.instance
-        .collection('campaigns') // Coleção de prêmios
+        .collection('campaigns')
         .where('associatedCompanyIds', arrayContains: companyId)
         .get();
 
@@ -201,10 +200,10 @@ class _ColaboradorDashboardScreenState extends State<ColaboradorDashboardScreen>
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2, // Mostra 2 prêmios por linha
+                  crossAxisCount: 2,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  childAspectRatio: 0.8, // Ajuste a proporção para o seu design
+                  childAspectRatio: 0.8,
                 ),
                 itemCount: data.activePrizes.length,
                 itemBuilder: (context, index) {
@@ -216,7 +215,6 @@ class _ColaboradorDashboardScreenState extends State<ColaboradorDashboardScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Aqui você pode adicionar a imagem do prêmio se tiver
                           Expanded(
                             child: Center(
                               child: Text(

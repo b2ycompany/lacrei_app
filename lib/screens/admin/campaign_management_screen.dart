@@ -106,8 +106,8 @@ class _AddEditPrizeScreenState extends State<AddEditPrizeScreen> {
   List<School> _allSchools = [];
   List<Company> _allCompanies = [];
   
-  Map<String, bool> _selectedSchools = {};
-  Map<String, bool> _selectedCompanies = {};
+  final Map<String, bool> _selectedSchools = {};
+  final Map<String, bool> _selectedCompanies = {};
   
   @override
   void initState() {
@@ -126,11 +126,15 @@ class _AddEditPrizeScreenState extends State<AddEditPrizeScreen> {
   Future<void> _fetchEntities() async {
     final schoolsSnapshot = await FirebaseFirestore.instance.collection('schools').orderBy('schoolName').get();
     _allSchools = schoolsSnapshot.docs.map((doc) => School(id: doc.id, name: doc.data()['schoolName'])).toList();
-    _allSchools.forEach((school) => _selectedSchools[school.id] = false);
+    for (var school in _allSchools) {
+      _selectedSchools[school.id] = false;
+    }
 
     final companiesSnapshot = await FirebaseFirestore.instance.collection('companies').orderBy('companyName').get();
     _allCompanies = companiesSnapshot.docs.map((doc) => Company(id: doc.id, name: doc.data()['companyName'])).toList();
-    _allCompanies.forEach((company) => _selectedCompanies[company.id] = false);
+    for (var company in _allCompanies) {
+      _selectedCompanies[company.id] = false;
+    }
   }
 
   void _populateFormForEditing() {
@@ -139,10 +143,14 @@ class _AddEditPrizeScreenState extends State<AddEditPrizeScreen> {
     _associationType = data['associationType'] ?? 'schools';
 
     if (_associationType == 'schools' && data['associatedSchoolIds'] != null) {
-      List<String>.from(data['associatedSchoolIds']).forEach((id) => _selectedSchools[id] = true);
+      for (var id in List<String>.from(data['associatedSchoolIds'])) {
+        _selectedSchools[id] = true;
+      }
     }
     if (_associationType == 'companies' && data['associatedCompanyIds'] != null) {
-      List<String>.from(data['associatedCompanyIds']).forEach((id) => _selectedCompanies[id] = true);
+      for (var id in List<String>.from(data['associatedCompanyIds'])) {
+        _selectedCompanies[id] = true;
+      }
     }
   }
 

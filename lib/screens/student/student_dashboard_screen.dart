@@ -7,7 +7,6 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:lacrei_app/screens/ranking_screen.dart';
 import '../profile_selection_screen.dart';
 
-// Modelo de dados atualizado para suportar múltiplos prêmios
 class GamifiedDashboardData {
   final String studentName;
   final String studentImageUrl;
@@ -15,7 +14,7 @@ class GamifiedDashboardData {
   final String schoolId;
   final String schoolName;
   final String luckyNumber;
-  final List<DocumentSnapshot> activeCampaigns; // Alterado para uma lista
+  final List<DocumentSnapshot> activeCampaigns;
 
   GamifiedDashboardData({
     required this.studentName,
@@ -54,7 +53,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final schoolId = userData['schoolId'] as String?;
     final schoolLinkStatus = userData['schoolLinkStatus'] as String? ?? 'none';
     final luckyNumber = userData['luckyNumber'] as String? ?? 'N/A';
-
+    
     if (schoolId == null || schoolLinkStatus != 'approved') {
       return GamifiedDashboardData(
         studentName: userData['name'] ?? 'Aluno(a)',
@@ -63,14 +62,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         schoolId: '',
         schoolName: '',
         luckyNumber: luckyNumber,
-        activeCampaigns: [], // Lista vazia se não aprovado
+        activeCampaigns: [],
       );
     }
 
     final schoolDoc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).get();
     if (!schoolDoc.exists) throw Exception("Escola não encontrada.");
 
-    // --- CORREÇÃO (Item #1): Busca TODAS as campanhas/prêmios ativos, não apenas 1 ---
+    // CORREÇÃO: Busca TODAS as campanhas/prêmios ativos para a escola
     final activeCampaignsSnapshot = await FirebaseFirestore.instance
         .collection('campaigns')
         .where('associatedSchoolIds', arrayContains: schoolId)
@@ -188,7 +187,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Métrica principal da escola
           StreamBuilder<DocumentSnapshot>(
             stream: FirebaseFirestore.instance.collection('schools').doc(data.schoolId).snapshots(),
             builder: (context, schoolSnapshot) {
@@ -218,8 +216,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             },
           ),
           const SizedBox(height: 24),
-
-          // Número da Sorte
           Card(
             color: const Color.fromARGB(255, 26, 12, 41),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -249,12 +245,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ),
           ),
           const SizedBox(height: 24),
-
           const Text("Recompensas Disponíveis", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-
           data.activeCampaigns.isEmpty
-              ? const Center(child: Text("Nenhuma recompensa ativa para sua escola no momento."))
+              ? const Center(child: Padding(padding: EdgeInsets.all(20), child: Text("Nenhuma recompensa ativa para sua escola no momento.")))
               : ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -269,7 +263,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        prizeData['campaignName'] ?? 'Recompensa',
+                        prizeData['prizeName'] ?? prizeData['campaignName'] ?? 'Recompensa',
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
@@ -285,7 +279,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           final schoolData = schoolSnapshot.data!.data() as Map<String, dynamic>;
                           final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
                           final goalKg = (prizeData['goalKg'] as num? ?? 1).toDouble();
-                          final percentage = (totalKg / goalKg).clamp(0.0, 1.0);
+                          
+                          // Garante que a meta não seja 0 para evitar divisão por zero
+                          final safeGoalKg = goalKg == 0 ? 1.0 : goalKg;
+                          final percentage = (totalKg / safeGoalKg).clamp(0.0, 1.0);
 
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
