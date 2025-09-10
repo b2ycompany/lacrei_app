@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_tilt/flutter_tilt.dart';
+import 'package:url_launcher/url_launcher.dart'; // Import do novo pacote
 import 'login_screen.dart';
 import 'registration/registration_selection_screen.dart';
 
@@ -19,6 +20,14 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
+  }
+
+  // Função auxiliar para abrir URLs (site, e-mail, WhatsApp)
+  Future<void> _launchURL(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri)) {
+      // Poderia mostrar um SnackBar de erro aqui se quisesse
+    }
   }
 
   @override
@@ -50,7 +59,6 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                         .animate().fade(delay: 400.ms, duration: 800.ms),
                     const SizedBox(height: 60),
 
-                    // --- ORDEM DOS BOTÕES ATUALIZADA ---
                     _ProfileButton(label: 'Aluno / Funcionário', color: const Color(0xFF99CC33), onPressed: () => _navigateToLogin(context))
                         .animate().fade(delay: 600.ms),
                     const SizedBox(height: 20),
@@ -83,6 +91,11 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 40),
+
+                    // --- NOVA SEÇÃO DE CRÉDITOS ADICIONADA AQUI ---
+                    _buildDeveloperCredits(),
+
                   ],
                 ),
               ),
@@ -91,6 +104,41 @@ class _ProfileSelectionScreenState extends State<ProfileSelectionScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildDeveloperCredits() {
+    return Column(
+      children: [
+        const Text(
+          "Solução desenvolvida por B2Y Group",
+          style: TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Ícone de E-mail
+            IconButton(
+              icon: const Icon(Icons.email_outlined, color: Colors.white54),
+              onPressed: () => _launchURL('mailto:b2ylion@gmail.com'),
+              tooltip: 'Enviar E-mail',
+            ),
+            // Ícone de Site
+            IconButton(
+              icon: const Icon(Icons.language, color: Colors.white54),
+              onPressed: () => _launchURL('https://b2y-lake.vercel.app/'),
+              tooltip: 'Acessar Site',
+            ),
+            // Ícone de Celular (WhatsApp)
+            IconButton(
+              icon: const Icon(Icons.phone_iphone, color: Colors.white54),
+              onPressed: () => _launchURL('https://wa.me/5511965520979'), // Link direto para WhatsApp
+              tooltip: 'Contato via Celular',
+            ),
+          ],
+        ),
+      ],
+    ).animate().fade(delay: 1500.ms);
   }
 }
 
