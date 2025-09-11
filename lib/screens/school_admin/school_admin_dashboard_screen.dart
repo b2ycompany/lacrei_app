@@ -222,7 +222,16 @@ class UrnStatusView extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         
         if (snapshot.hasError) {
-          return const Center(child: Text("Erro ao carregar dados da urna."));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                "Ocorreu um erro ao carregar os dados da urna. Verifique as permissões do banco de dados (regras de segurança).",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.redAccent)
+              ),
+            ),
+          );
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(child: Text("Nenhuma urna atribuída a este local."));
@@ -275,7 +284,7 @@ class UrnStatusView extends StatelessWidget {
   }
 }
 
-// WIDGET PARA VISUALIZAR PRÊMIOS (ANTIGO CAMPANHAS)
+// WIDGET PARA VISUALIZAR PRÊMIOS
 class CampaignApprovalView extends StatelessWidget {
   final String schoolId;
   const CampaignApprovalView({super.key, required this.schoolId});
@@ -315,10 +324,6 @@ class CampaignApprovalView extends StatelessWidget {
                     Text(data['campaignName'] ?? 'Prêmio sem nome', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Text("Oferecido por: ${data['prizeName'] ?? 'Não informado'}"),
-                    
-                    // --- CORREÇÃO APLICADA AQUI ---
-                    // O campo 'Meta' foi removido para alinhar com a nova lógica.
-                    // Adicionaremos o campo 'Qtde Vouchers' quando o módulo de Prêmios for refeito.
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

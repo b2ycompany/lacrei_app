@@ -69,7 +69,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final schoolDoc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).get();
     if (!schoolDoc.exists) throw Exception("Escola não encontrada.");
 
-    // CORREÇÃO: Busca TODAS as campanhas/prêmios ativos para a escola
     final activeCampaignsSnapshot = await FirebaseFirestore.instance
         .collection('campaigns')
         .where('associatedSchoolIds', arrayContains: schoolId)
@@ -162,7 +161,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text("Erro ao carregar dados: ${snapshot.error}", style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)));
+            return Center(child: Padding(padding: const EdgeInsets.all(16.0), child: Text("Erro ao carregar dados: ${snapshot.error.toString().replaceAll('Exception: ', '')}", style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)));
           }
           if (snapshot.hasData) {
             final data = snapshot.data!;
@@ -270,44 +269,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       Text(
                         prizeData['prizeDescription'] ?? 'Detalhes não disponíveis.',
                         style: const TextStyle(fontSize: 14, color: Colors.white70),
-                      ),
-                      const SizedBox(height: 12),
-                      StreamBuilder<DocumentSnapshot>(
-                        stream: FirebaseFirestore.instance.collection('schools').doc(data.schoolId).snapshots(),
-                        builder: (context, schoolSnapshot) {
-                          if (!schoolSnapshot.hasData) return const SizedBox.shrink();
-                          final schoolData = schoolSnapshot.data!.data() as Map<String, dynamic>;
-                          final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
-                          final goalKg = (prizeData['goalKg'] as num? ?? 1).toDouble();
-                          
-                          // Garante que a meta não seja 0 para evitar divisão por zero
-                          final safeGoalKg = goalKg == 0 ? 1.0 : goalKg;
-                          final percentage = (totalKg / safeGoalKg).clamp(0.0, 1.0);
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: LinearProgressIndicator(
-                                  value: percentage,
-                                  minHeight: 15,
-                                  backgroundColor: Colors.purple.shade900.withOpacity(0.5),
-                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                "${(percentage * 100).toStringAsFixed(1)}% CONCLUÍDO",
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.greenAccent, letterSpacing: 1),
-                              ),
-                              Text(
-                                "${totalKg.toStringAsFixed(1)} / ${goalKg.toStringAsFixed(1)} kg",
-                                style: const TextStyle(color: Colors.white70),
-                              ),
-                            ],
-                          );
-                        },
                       ),
                     ],
                   ),
