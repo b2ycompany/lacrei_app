@@ -1,4 +1,5 @@
 // lib/screens/admin/admin_dashboard_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,7 +20,8 @@ import 'sponsorship_plans_screen.dart';
 import 'company_management_screen.dart';
 import 'institution_management_screen.dart';
 import 'sales_report_screen.dart';
-import 'access_approval_screen.dart'; // 1. Import da nova tela
+import 'access_approval_screen.dart';
+import 'register_collection_screen.dart';
 
 class SchoolParticipationReport {
   final String schoolName;
@@ -109,7 +111,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     html.Url.revokeObjectUrl(url);
   }
 
-  Future<void> _logout(BuildContext context) async {
+  // --- CORREÇÃO 2: A função _logout agora não recebe 'context' e usa o do State ---
+  Future<void> _logout() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null && user.providerData.any((info) => info.providerId == 'google.com')) {
@@ -118,12 +121,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       await FirebaseAuth.instance.signOut();
       
       if (!mounted) return;
+      // Usando o 'context' do State, que é seguro após a verificação 'mounted'
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const ProfileSelectionScreen()),
         (route) => false,
       );
     } catch (e) {
-      // Handle error
+      // Lidar com o erro, por exemplo, mostrando uma SnackBar
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao sair: ${e.toString()}')));
+      }
     }
   }
 
@@ -137,7 +144,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sair',
-            onPressed: () => _logout(context),
+            onPressed: _logout, // A chamada agora é direta, sem passar o context
           ),
         ],
       ),
@@ -192,34 +199,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
+              crossAxisCount: 2, 
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
               childAspectRatio: 1.2,
               children: [
-                  // --- 2. NOVO CARD DE APROVAÇÕES ADICIONADO ---
                   _buildApprovalCard(context),
+                  
+                  _buildDashboardCard(
+                    context: context,
+                    icon: Icons.scale_outlined,
+                    label: "Lançar Coleta",
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterCollectionScreen())),
+                    isHighlighted: true,
+                  ),
                   
                   _buildDashboardCard(
                     context: context,
                     icon: Icons.bar_chart,
                     label: "Relatório de Vendas",
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesReportScreen())),
-                    isHighlighted: true,
                   ),
                   _buildDashboardCard(
                     context: context,
                     icon: Icons.group_add,
                     label: "Equipe de Vendas",
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SalesManagementScreen())),
-                    isHighlighted: true,
                   ),
                   _buildDashboardCard(
                     context: context,
                     icon: Icons.monetization_on,
                     label: "Planos de Patrocínio",
+                    // --- CORREÇÃO 1: 'text' foi substituído por 'context' ---
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SponsorshipPlansScreen())),
-                    isHighlighted: true,
                   ),
                   _buildDashboardCard(
                     context: context, icon: Icons.flag, label: "Gerenciar Campanhas", 
@@ -267,7 +279,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
   
-  // --- 3. NOVO WIDGET ESPECÍFICO PARA O CARD DE APROVAÇÃO ---
   Widget _buildApprovalCard(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').where('accountStatus', isEqualTo: 'pending').snapshots(),
@@ -282,7 +293,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               icon: Icons.how_to_reg,
               label: "Aprovações de Acesso",
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AccessApprovalScreen())),
-              isHighlighted: pendingCount > 0, // Destaque se houver pendências
+              isHighlighted: pendingCount > 0,
             ),
             if (pendingCount > 0)
               Positioned(

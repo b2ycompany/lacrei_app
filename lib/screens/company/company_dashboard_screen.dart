@@ -106,7 +106,7 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 4, // Removida a aba de registro de coleta
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(_companyName ?? "Painel da Empresa"),
@@ -146,11 +146,57 @@ class _CompanyDashboardScreenState extends State<CompanyDashboardScreen> {
   }
 }
 
-// WIDGETS AUXILIARES PARA CADA ABA
-
+// --- WIDGET DO PAINEL PRINCIPAL ATUALIZADO ---
 class CompanyDashboardView extends StatelessWidget {
   final String companyId;
   const CompanyDashboardView({super.key, required this.companyId});
+
+  // Widget reutilizável para o Cartão de Missão
+  Widget _buildMissionCard({
+    required String title,
+    required double totalCollectedKg,
+    required double goalKg,
+  }) {
+    final progress = (goalKg > 0) ? (totalCollectedKg / goalKg).clamp(0.0, 1.0) : 0.0;
+    
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(colors: [Color(0xFF6A1B9A), Color(0xFF8E24AA)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        ),
+        child: Column(
+          children: [
+            Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(text: "${totalCollectedKg.toStringAsFixed(1)} ", style: const TextStyle(color: Colors.greenAccent)),
+                  TextSpan(text: "/ ${goalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 22, color: Colors.white70)),
+                ]
+              )
+            ),
+            const Text("Meta de Arrecadação", style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 12,
+                backgroundColor: Colors.purple[900]?.withOpacity(0.5),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -164,18 +210,14 @@ class CompanyDashboardView extends StatelessWidget {
               if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               final data = snapshot.data!.data() as Map<String, dynamic>;
               final totalKg = (data['totalCollectedKg'] as num? ?? 0).toDouble();
-              return Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      const Text("Total Geral Arrecadado", style: TextStyle(fontSize: 18, color: Colors.white70)),
-                      const SizedBox(height: 12),
-                      Text("${totalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                    ],
-                  ),
-                ),
+              final goalKg = (data['goalKg'] as num? ?? 0).toDouble();
+              final companyName = data['companyName'] ?? 'Sua Empresa';
+
+              // Retorna o novo Cartão de Missão
+              return _buildMissionCard(
+                title: companyName,
+                totalCollectedKg: totalKg,
+                goalKg: goalKg,
               );
             },
           ),
@@ -206,6 +248,7 @@ class CompanyDashboardView extends StatelessWidget {
   }
 }
 
+// O restante dos widgets (CompanyCollaboratorsView, UrnStatusView, CompanyCampaignsView) permanece inalterado.
 class CompanyCollaboratorsView extends StatelessWidget {
   final String companyId;
   const CompanyCollaboratorsView({super.key, required this.companyId});
@@ -305,7 +348,6 @@ class CompanyCampaignsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A lógica será atualizada para buscar apenas prêmios associados a esta empresa
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('campaigns')
           .where('associatedCompanyIds', arrayContains: companyId)

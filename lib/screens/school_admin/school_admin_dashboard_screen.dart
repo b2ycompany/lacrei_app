@@ -70,7 +70,6 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
-    // ALTERAÇÃO (Item #5): Controller agora tem 4 abas, pois "Registar Coleta" foi removida.
     return DefaultTabController(
       length: 4, 
       child: Scaffold(
@@ -87,7 +86,6 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
             isScrollable: true,
             tabs: [
               const Tab(icon: Icon(Icons.dashboard), text: "Painel"),
-              // ALTERAÇÃO (Item #3): Texto da aba alterado para "Prémios".
               const Tab(icon: Icon(Icons.campaign), text: "Prémios"),
               const Tab(icon: Icon(Icons.inventory_2_outlined), text: "Urnas"),
               Tab(
@@ -125,7 +123,6 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
             : _schoolId == null
                 ? const Center(child: Text("Administrador não vinculado a uma escola."))
                 : TabBarView(
-                    // ALTERAÇÃO (Item #5): View de "Registar Coleta" removida.
                     children: [
                       SchoolDashboardView(schoolId: _schoolId!),
                       CampaignApprovalView(schoolId: _schoolId!),
@@ -138,10 +135,58 @@ class _SchoolAdminDashboardScreenState extends State<SchoolAdminDashboardScreen>
   }
 }
 
-// WIDGET PARA O PAINEL PRINCIPAL DO ADMIN DA ESCOLA
+// --- WIDGET DO PAINEL PRINCIPAL ATUALIZADO ---
 class SchoolDashboardView extends StatelessWidget {
   final String schoolId;
   const SchoolDashboardView({super.key, required this.schoolId});
+
+  // Widget reutilizável para o Cartão de Missão
+  Widget _buildMissionCard({
+    required String title,
+    required double totalCollectedKg,
+    required double goalKg,
+  }) {
+    final progress = (goalKg > 0) ? (totalCollectedKg / goalKg).clamp(0.0, 1.0) : 0.0;
+    
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(colors: [Color(0xFF6A1B9A), Color(0xFF8E24AA)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        ),
+        child: Column(
+          children: [
+            Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white), textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(text: "${totalCollectedKg.toStringAsFixed(1)} ", style: const TextStyle(color: Colors.greenAccent)),
+                  TextSpan(text: "/ ${goalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 22, color: Colors.white70)),
+                ]
+              )
+            ),
+            const Text("Meta de Arrecadação", style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 12,
+                backgroundColor: Colors.purple[900]?.withOpacity(0.5),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -154,22 +199,18 @@ class SchoolDashboardView extends StatelessWidget {
             stream: FirebaseFirestore.instance.collection('schools').doc(schoolId).snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-              if (!snapshot.hasData || snapshot.data?.data() == null) return const Card(child: Padding(padding: EdgeInsets.all(20.0), child: Text("N/A kg")));
+              if (!snapshot.hasData || snapshot.data?.data() == null) return const Card(child: Padding(padding: EdgeInsets.all(20.0), child: Text("Dados da escola não encontrados.")));
               
               final schoolData = snapshot.data!.data() as Map<String, dynamic>;
               final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
-              return Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Column(
-                    children: [
-                      const Text("Total Geral Arrecadado", style: TextStyle(fontSize: 18, color: Colors.white70)),
-                      const SizedBox(height: 12),
-                      Text("${totalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                    ],
-                  ),
-                ),
+              final goalKg = (schoolData['goalKg'] as num? ?? 0).toDouble();
+              final schoolName = schoolData['schoolName'] ?? 'Sua Escola';
+
+              // Retorna o novo Cartão de Missão
+              return _buildMissionCard(
+                title: schoolName,
+                totalCollectedKg: totalKg,
+                goalKg: goalKg,
               );
             },
           ),
@@ -200,7 +241,7 @@ class SchoolDashboardView extends StatelessWidget {
   }
 }
 
-// WIDGET PARA EXIBIR E GERIR O STATUS DA URNA
+// O restante dos widgets (UrnStatusView, CampaignApprovalView, PendingRequestsView) permanece inalterado.
 class UrnStatusView extends StatelessWidget {
   final String assignedToId;
   const UrnStatusView({super.key, required this.assignedToId});
@@ -224,7 +265,6 @@ class UrnStatusView extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         
-        // ALTERAÇÃO (Item #4): Tratamento de erro mais robusto.
         if (snapshot.hasError) {
           return const Center(child: Text("Erro ao carregar dados da urna."));
         }
@@ -279,7 +319,6 @@ class UrnStatusView extends StatelessWidget {
   }
 }
 
-// WIDGET PARA VISUALIZAR PRÉMIOS (ANTIGO CAMPANHAS)
 class CampaignApprovalView extends StatelessWidget {
   final String schoolId;
   const CampaignApprovalView({super.key, required this.schoolId});
@@ -339,7 +378,6 @@ class CampaignApprovalView extends StatelessWidget {
   }
 }
 
-// WIDGET PARA APROVAR/REJEITAR ALUNOS PENDENTES
 class PendingRequestsView extends StatelessWidget {
   final String schoolId;
   const PendingRequestsView({super.key, required this.schoolId});
