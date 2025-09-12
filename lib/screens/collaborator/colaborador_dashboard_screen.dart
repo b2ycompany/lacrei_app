@@ -12,6 +12,10 @@ class CollaboratorDashboardData {
   final String companyName;
   final String luckyNumber;
   final List<DocumentSnapshot> activePrizes;
+  // 1. Novos campos para a meta
+  final double goalKg;
+  final double totalCollectedKg;
+
 
   CollaboratorDashboardData({
     required this.collaboratorName,
@@ -19,6 +23,8 @@ class CollaboratorDashboardData {
     required this.companyName,
     required this.luckyNumber,
     required this.activePrizes,
+    required this.goalKg,
+    required this.totalCollectedKg,
   });
 }
 
@@ -56,7 +62,11 @@ class _ColaboradorDashboardScreenState extends State<ColaboradorDashboardScreen>
     final companyDoc = await FirebaseFirestore.instance.collection('companies').doc(companyId).get();
     if (!companyDoc.exists) throw Exception("Empresa não encontrada.");
 
-    // Busca todos os prêmios associados a esta empresa
+    // 2. Carrega os dados da meta diretamente do documento da empresa
+    final companyData = companyDoc.data()!;
+    final goalKg = (companyData['goalKg'] as num? ?? 0).toDouble();
+    final totalCollectedKg = (companyData['totalCollectedKg'] as num? ?? 0).toDouble();
+
     final activePrizesSnapshot = await FirebaseFirestore.instance
         .collection('campaigns')
         .where('associatedCompanyIds', arrayContains: companyId)
@@ -65,12 +75,15 @@ class _ColaboradorDashboardScreenState extends State<ColaboradorDashboardScreen>
     return CollaboratorDashboardData(
       collaboratorName: userData['name'] ?? 'Colaborador(a)',
       companyId: companyId,
-      companyName: companyDoc.data()?['companyName'] ?? 'Nome da Empresa',
+      companyName: companyData['companyName'] ?? 'Nome da Empresa',
       activePrizes: activePrizesSnapshot.docs,
       luckyNumber: luckyNumber,
+      goalKg: goalKg, // Passa o valor carregado
+      totalCollectedKg: totalCollectedKg, // Passa o valor carregado
     );
   }
 
+  // ... (funções _logout e _showLogoutConfirmationDialog permanecem inalteradas)
   Future<void> _logout() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -120,6 +133,7 @@ class _ColaboradorDashboardScreenState extends State<ColaboradorDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    // ... (build principal permanece o mesmo)
     return Scaffold(
       appBar: AppBar(
         title: const Text('Painel do Colaborador'),
@@ -150,6 +164,50 @@ class _ColaboradorDashboardScreenState extends State<ColaboradorDashboardScreen>
     );
   }
 
+  // 3. Novo Widget para o "Cartão de Missão" do Colaborador
+  Widget _buildMissionCard(CollaboratorDashboardData data) {
+    final progress = (data.goalKg > 0) ? (data.totalCollectedKg / data.goalKg).clamp(0.0, 1.0) : 0.0;
+    
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      margin: const EdgeInsets.only(bottom: 24),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(colors: [Color(0xFF6A1B9A), Color(0xFF8E24AA)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        ),
+        child: Column(
+          children: [
+            Text(data.companyName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 12),
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(text: "${data.totalCollectedKg.toStringAsFixed(1)} ", style: const TextStyle(color: Colors.greenAccent)),
+                  TextSpan(text: "/ ${data.goalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 22, color: Colors.white70)),
+                ]
+              )
+            ),
+            const Text("Total Arrecadado pela Empresa", style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 12,
+                backgroundColor: Colors.purple[900]?.withOpacity(0.5),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildDashboard(CollaboratorDashboardData data) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -157,9 +215,10 @@ class _ColaboradorDashboardScreenState extends State<ColaboradorDashboardScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("Bem-vindo(a), ${data.collaboratorName}!", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text("Você é colaborador da empresa: ${data.companyName}", style: const TextStyle(fontSize: 18, color: Colors.white70)),
-          const Divider(height: 32),
+          const Divider(height: 24),
+
+          // Adicionado o novo cartão de missão aqui
+          _buildMissionCard(data),
           
           Card(
             color: const Color.fromARGB(255, 26, 12, 41),

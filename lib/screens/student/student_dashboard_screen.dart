@@ -9,21 +9,24 @@ import '../profile_selection_screen.dart';
 
 class GamifiedDashboardData {
   final String studentName;
-  final String studentImageUrl;
   final String schoolLinkStatus;
   final String schoolId;
   final String schoolName;
   final String luckyNumber;
   final List<DocumentSnapshot> activeCampaigns;
+  // 1. Novos campos para a meta
+  final double goalKg;
+  final double totalCollectedKg;
 
   GamifiedDashboardData({
     required this.studentName,
-    required this.studentImageUrl,
     required this.schoolLinkStatus,
     required this.schoolId,
     required this.schoolName,
     required this.luckyNumber,
     required this.activeCampaigns,
+    required this.goalKg,
+    required this.totalCollectedKg,
   });
 }
 
@@ -44,10 +47,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   Future<GamifiedDashboardData> _fetchDashboardData() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception("Usuário não logado.");
+    if (user == null) throw Exception("Utilizador não logado.");
 
     final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    if (!userDoc.exists) throw Exception("Perfil do usuário não encontrado.");
+    if (!userDoc.exists) throw Exception("Perfil do utilizador não encontrado.");
 
     final userData = userDoc.data()!;
     final schoolId = userData['schoolId'] as String?;
@@ -57,17 +60,23 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     if (schoolId == null || schoolLinkStatus != 'approved') {
       return GamifiedDashboardData(
         studentName: userData['name'] ?? 'Aluno(a)',
-        studentImageUrl: userData['userImageUrl'] ?? '',
         schoolLinkStatus: schoolLinkStatus,
         schoolId: '',
         schoolName: '',
         luckyNumber: luckyNumber,
         activeCampaigns: [],
+        goalKg: 0.0, // Valor padrão
+        totalCollectedKg: 0.0, // Valor padrão
       );
     }
 
     final schoolDoc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).get();
     if (!schoolDoc.exists) throw Exception("Escola não encontrada.");
+
+    // 2. Carrega os dados da meta diretamente do documento da escola
+    final schoolData = schoolDoc.data()!;
+    final goalKg = (schoolData['goalKg'] as num? ?? 0).toDouble();
+    final totalCollectedKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
 
     final activeCampaignsSnapshot = await FirebaseFirestore.instance
         .collection('campaigns')
@@ -76,15 +85,17 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     return GamifiedDashboardData(
       studentName: userData['name'] ?? 'Aluno(a)',
-      studentImageUrl: userData['userImageUrl'] ?? '',
       schoolLinkStatus: schoolLinkStatus,
       schoolId: schoolId,
-      schoolName: schoolDoc.data()?['schoolName'] ?? 'Nome da Escola',
+      schoolName: schoolData['schoolName'] ?? 'Nome da Escola',
       activeCampaigns: activeCampaignsSnapshot.docs,
       luckyNumber: luckyNumber,
+      goalKg: goalKg, // Passa o valor carregado
+      totalCollectedKg: totalCollectedKg, // Passa o valor carregado
     );
   }
 
+  // ... (funções _logout e _showLogoutConfirmationDialog permanecem inalteradas)
   Future<void> _logout() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -133,8 +144,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
+
   @override
   Widget build(BuildContext context) {
+    // ... (build principal permanece o mesmo)
     return Scaffold(
       appBar: AppBar(
         title: const Text('Minha Missão'),
@@ -180,40 +193,58 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
+  // 3. Novo Widget para o "Cartão de Missão"
+  Widget _buildMissionCard(GamifiedDashboardData data) {
+    final progress = (data.goalKg > 0) ? (data.totalCollectedKg / data.goalKg).clamp(0.0, 1.0) : 0.0;
+    
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(colors: [Color(0xFF6A1B9A), Color(0xFF8E24AA)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        ),
+        child: Column(
+          children: [
+            Text(data.schoolName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 12),
+            Text.rich(
+              TextSpan(
+                style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(text: "${data.totalCollectedKg.toStringAsFixed(1)} ", style: const TextStyle(color: Colors.greenAccent)),
+                  TextSpan(text: "/ ${data.goalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 22, color: Colors.white70)),
+                ]
+              )
+            ),
+            const Text("Total Arrecadado pela Escola", style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 12,
+                backgroundColor: Colors.purple[900]?.withOpacity(0.5),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.greenAccent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildApprovedDashboard(GamifiedDashboardData data) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance.collection('schools').doc(data.schoolId).snapshots(),
-            builder: (context, schoolSnapshot) {
-              if (!schoolSnapshot.hasData) return const SizedBox.shrink();
-              final schoolData = schoolSnapshot.data!.data() as Map<String, dynamic>;
-              final totalKg = (schoolData['totalCollectedKg'] as num? ?? 0).toDouble();
+          // Substituído o StreamBuilder pelo novo Card
+          _buildMissionCard(data),
 
-              return Card(
-                elevation: 8,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: const LinearGradient(colors: [Color(0xFF6A1B9A), Color(0xFF8E24AA)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(data.schoolName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const SizedBox(height: 12),
-                      Text("${totalKg.toStringAsFixed(1)} kg", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
-                      const Text("Total Arrecadado pela Escola", style: TextStyle(color: Colors.white70)),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
           const SizedBox(height: 24),
           Card(
             color: const Color.fromARGB(255, 26, 12, 41),
@@ -281,28 +312,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildNoActiveCampaignScreen(GamifiedDashboardData data) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.gamepad_outlined, size: 80, color: Colors.grey),
-            const SizedBox(height: 24),
-            Text('Olá, ${data.studentName}!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            const Text(
-              'A sua escola ainda não iniciou uma nova campanha.\n\nAguarde a próxima missão!',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.white70, height: 1.5),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
+  // ... (buildPendingScreen e buildNoLinkScreen permanecem os mesmos)
   Widget _buildPendingScreen(GamifiedDashboardData data) {
     return Center(child: Padding(padding: const EdgeInsets.all(32.0), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       const Icon(Icons.hourglass_top_rounded, size: 80, color: Colors.amber),

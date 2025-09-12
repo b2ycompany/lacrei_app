@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart'; // Importação para formatação de data
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 class Institution {
@@ -36,6 +37,11 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
   final _nameController = TextEditingController();
   final _cnpjController = TextEditingController();
   
+  // --- NOVOS CONTROLLERS PARA METAS ---
+  final _goalKgController = TextEditingController();
+  final _goalStartDateController = TextEditingController();
+  final _goalEndDateController = TextEditingController();
+  
   bool _isLoading = true;
   bool get _isEditing => widget.companyId != null;
 
@@ -48,6 +54,10 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
   SponsorshipPlan? _selectedPlan;
   String? _selectedStatus;
   String? _selectedCompanyType;
+  
+  // --- NOVAS VARIÁVEIS DE ESTADO PARA DATAS ---
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   final List<String> _companyTypeOptions = ['Patrocinadora', 'Ponto de Coleta', 'Apoiadora', 'Parceira Logística'];
   final List<String> _statusOptions = ['Prospect', 'Urna Instalada', 'Patrocinador Ativo', 'Inativo'];
@@ -57,6 +67,17 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
   void initState() {
     super.initState();
     _loadInitialData();
+  }
+
+  // --- NOVO MÉTODO DISPOSE PARA LIMPAR OS CONTROLLERS ---
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _cnpjController.dispose();
+    _goalKgController.dispose();
+    _goalStartDateController.dispose();
+    _goalEndDateController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadInitialData() async {
@@ -107,9 +128,42 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
         if (planId != null) {
           _selectedPlan = _plansList.where((p) => p.id == planId).firstOrNull;
         }
+
+        // --- CARREGA DADOS DA META ---
+        _goalKgController.text = (data['goalKg'] as num?)?.toString() ?? '';
+        _startDate = (data['goalStartDate'] as Timestamp?)?.toDate();
+        _endDate = (data['goalEndDate'] as Timestamp?)?.toDate();
+
+        if (_startDate != null) {
+          _goalStartDateController.text = DateFormat('dd/MM/yyyy').format(_startDate!);
+        }
+        if (_endDate != null) {
+          _goalEndDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
+        }
       }
     } catch (e) {
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados da empresa: $e')));
+    }
+  }
+
+  // --- NOVA FUNÇÃO PARA SELECIONAR DATA ---
+  Future<void> _selectDate(BuildContext context, bool isStartDate) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: (isStartDate ? _startDate : _endDate) ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStartDate) {
+          _startDate = picked;
+          _goalStartDateController.text = DateFormat('dd/MM/yyyy').format(picked);
+        } else {
+          _endDate = picked;
+          _goalEndDateController.text = DateFormat('dd/MM/yyyy').format(picked);
+        }
+      });
     }
   }
 
@@ -120,15 +174,12 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
     final cnpj = _cnpjController.text.trim();
 
     try {
-      // --- NOVA VERIFICAÇÃO DE CNPJ DUPLICADO ---
       final query = FirebaseFirestore.instance.collection('companies').where('cnpj', isEqualTo: cnpj).limit(1);
       final snapshot = await query.get();
 
-      // Se encontrou um documento E (não estamos editando OU o ID encontrado é diferente do que estamos editando)
       if (snapshot.docs.isNotEmpty && (!_isEditing || snapshot.docs.first.id != widget.companyId)) {
         throw Exception('Já existe uma empresa cadastrada com este CNPJ.');
       }
-      // --- FIM DA VERIFICAÇÃO ---
 
       final companyData = {
         'companyName': _nameController.text.trim(),
@@ -138,6 +189,12 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
         'sponsorshipStatus': _selectedStatus,
         'companyType': _selectedCompanyType,
         'institutionId': _selectedInstitution?.id,
+        
+        // --- SALVA OS NOVOS CAMPOS DE META ---
+        'goalKg': double.tryParse(_goalKgController.text.replaceAll(',', '.')) ?? 0.0,
+        'goalStartDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
+        'goalEndDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
+        
         if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
       };
 
@@ -174,7 +231,6 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                   // --- CAMPO DE SELEÇÃO DE INSTITUIÇÃO ADICIONADO AQUI ---
                   if (_institutionsList.isEmpty)
                     const Padding(
                       padding: EdgeInsets.only(bottom: 16.0),
@@ -202,6 +258,40 @@ class _EditCompanyScreenState extends State<EditCompanyScreen> {
                   DropdownButtonFormField<SponsorshipPlan?>(value: _selectedPlan, decoration: const InputDecoration(labelText: 'Plano de Patrocínio'), items: [const DropdownMenuItem<SponsorshipPlan?>(value: null, child: Text("Nenhum / Deixar em branco", style: TextStyle(fontStyle: FontStyle.italic))), ..._plansList.map((plan) => DropdownMenuItem<SponsorshipPlan>(value: plan, child: Text(plan.name)))], onChanged: (value) => setState(() => _selectedPlan = value)),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(value: _selectedStatus, decoration: const InputDecoration(labelText: 'Status do Patrocínio'), items: _statusOptions.map((status) => DropdownMenuItem(value: status, child: Text(status))).toList(), onChanged: (value) => setState(() => _selectedStatus = value), validator: (v) => v == null || v.isEmpty ? 'Campo obrigatório' : null),
+                  
+                  // --- NOVA SEÇÃO DE METAS NO FORMULÁRIO ---
+                  const Divider(height: 32, thickness: 1),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 16.0),
+                    child: Text("Meta Trimestral", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
+                  TextFormField(
+                    controller: _goalKgController,
+                    decoration: const InputDecoration(labelText: 'Meta de Arrecadação (Kg)'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _goalStartDateController,
+                          decoration: const InputDecoration(labelText: 'Data de Início da Meta'),
+                          readOnly: true,
+                          onTap: () => _selectDate(context, true),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _goalEndDateController,
+                          decoration: const InputDecoration(labelText: 'Data de Fim da Meta'),
+                          readOnly: true,
+                          onTap: () => _selectDate(context, false),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

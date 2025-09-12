@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart'; // Importação para formatação de data
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 // Modelo para o dropdown de instituições
@@ -30,6 +31,11 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
   final _addressDistrictController = TextEditingController();
   final _addressCityController = TextEditingController();
   final _addressStateController = TextEditingController();
+  
+  // --- NOVOS CONTROLLERS PARA METAS ---
+  final _goalKgController = TextEditingController();
+  final _goalStartDateController = TextEditingController();
+  final _goalEndDateController = TextEditingController();
 
   bool _isLoading = true;
   bool get _isEditing => widget.schoolId != null;
@@ -37,6 +43,10 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
   // Variáveis para o dropdown de instituições
   List<Institution> _institutionsList = [];
   Institution? _selectedInstitution;
+  
+  // --- NOVAS VARIÁVEIS DE ESTADO PARA DATAS ---
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   final _phoneMaskFormatter = MaskTextInputFormatter(mask: '(##) #####-####', filter: {"#": RegExp(r'[0-9]')});
   final _cepMaskFormatter = MaskTextInputFormatter(mask: '#####-###', filter: {"#": RegExp(r'[0-9]')});
@@ -45,6 +55,23 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
   void initState() {
     super.initState();
     _loadInitialData();
+  }
+
+  // --- NOVO MÉTODO DISPOSE PARA LIMPAR OS CONTROLLERS ---
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _cepController.dispose();
+    _addressController.dispose();
+    _addressNumberController.dispose();
+    _addressDistrictController.dispose();
+    _addressCityController.dispose();
+    _addressStateController.dispose();
+    _goalKgController.dispose();
+    _goalStartDateController.dispose();
+    _goalEndDateController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadInitialData() async {
@@ -82,9 +109,42 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
         if (institutionId != null) {
           _selectedInstitution = _institutionsList.where((i) => i.id == institutionId).firstOrNull;
         }
+        
+        // --- CARREGA DADOS DA META ---
+        _goalKgController.text = (data['goalKg'] as num?)?.toString() ?? '';
+        _startDate = (data['goalStartDate'] as Timestamp?)?.toDate();
+        _endDate = (data['goalEndDate'] as Timestamp?)?.toDate();
+
+        if (_startDate != null) {
+          _goalStartDateController.text = DateFormat('dd/MM/yyyy').format(_startDate!);
+        }
+        if (_endDate != null) {
+          _goalEndDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
+        }
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
+    }
+  }
+
+  // --- NOVA FUNÇÃO PARA SELECIONAR DATA ---
+  Future<void> _selectDate(BuildContext context, bool isStartDate) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: (isStartDate ? _startDate : _endDate) ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStartDate) {
+          _startDate = picked;
+          _goalStartDateController.text = DateFormat('dd/MM/yyyy').format(picked);
+        } else {
+          _endDate = picked;
+          _goalEndDateController.text = DateFormat('dd/MM/yyyy').format(picked);
+        }
+      });
     }
   }
 
@@ -100,7 +160,13 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
       'schoolDistrict': _addressDistrictController.text.trim(),
       'city': _addressCityController.text.trim(),
       'schoolState': _addressStateController.text.trim(),
-      'institutionId': _selectedInstitution?.id, // Salva o ID da instituição
+      'institutionId': _selectedInstitution?.id,
+      
+      // --- SALVA OS NOVOS CAMPOS DE META ---
+      'goalKg': double.tryParse(_goalKgController.text.replaceAll(',', '.')) ?? 0.0,
+      'goalStartDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
+      'goalEndDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
+
       if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
     };
 
@@ -137,7 +203,6 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16.0),
                 children: [
-                  // --- CAMPO DE SELEÇÃO DE INSTITUIÇÃO ADICIONADO AQUI ---
                   if (_institutionsList.isEmpty)
                     const Padding(
                       padding: EdgeInsets.only(bottom: 16.0),
@@ -171,6 +236,40 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
                   TextFormField(controller: _addressCityController, decoration: const InputDecoration(labelText: 'Cidade')),
                   const SizedBox(height: 16),
                   TextFormField(controller: _addressStateController, decoration: const InputDecoration(labelText: 'Estado')),
+
+                  // --- NOVA SEÇÃO DE METAS NO FORMULÁRIO ---
+                  const Divider(height: 32, thickness: 1),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 16.0),
+                    child: Text("Meta Trimestral", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
+                  TextFormField(
+                    controller: _goalKgController,
+                    decoration: const InputDecoration(labelText: 'Meta de Arrecadação (Kg)'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _goalStartDateController,
+                          decoration: const InputDecoration(labelText: 'Data de Início da Meta'),
+                          readOnly: true,
+                          onTap: () => _selectDate(context, true),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _goalEndDateController,
+                          decoration: const InputDecoration(labelText: 'Data de Fim da Meta'),
+                          readOnly: true,
+                          onTap: () => _selectDate(context, false),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),

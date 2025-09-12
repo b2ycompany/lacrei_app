@@ -1,5 +1,6 @@
 // lib/screens/registration/colaborador_empresa_registration_screen.dart
 
+import 'dart:math'; // 1. Importado para gerar números aleatórios
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -46,6 +47,12 @@ class _ColaboradorEmpresaRegistrationScreenState extends State<ColaboradorEmpres
     super.dispose();
   }
 
+  // 2. Nova função para gerar o número da sorte
+  String _generateLuckyNumber() {
+    final random = Random();
+    return List.generate(6, (_) => random.nextInt(10)).join();
+  }
+
   Future<void> _fetchCompanies() async {
     setState(() => _isLoading = true);
     try {
@@ -75,15 +82,18 @@ class _ColaboradorEmpresaRegistrationScreenState extends State<ColaboradorEmpres
 
       await user.updateDisplayName(_nameController.text.trim());
 
-      // --- ALTERAÇÃO PRINCIPAL AQUI ---
+      // 3. Gerar e adicionar o número da sorte ao salvar
+      final String luckyNumber = _generateLuckyNumber();
+
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
         'role': 'colaborador_empresa',
         'companyId': _selectedCompany!.id,
         'companyName': _selectedCompany!.name,
+        'luckyNumber': luckyNumber, // Campo adicionado
         'createdAt': Timestamp.now(),
-        'accountStatus': 'approved', // 1. Adicionado status 'approved' para colaboradores
+        'accountStatus': 'approved',
       });
 
       if (mounted) {
@@ -130,7 +140,7 @@ class _ColaboradorEmpresaRegistrationScreenState extends State<ColaboradorEmpres
               child: Padding(
                 padding: EdgeInsets.all(24.0),
                 child: Text(
-                  "Nenhuma empresa disponível para cadastro. Contate o administrador do sistema.", // Texto ajustado
+                  "Nenhuma empresa disponível para cadastro. Contate o administrador do sistema.",
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 16, color: Colors.white70),
                 ),
