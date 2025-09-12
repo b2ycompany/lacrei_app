@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // Importação para formatação de data
+import 'package:intl/intl.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 // Modelo para o dropdown de instituições
@@ -12,39 +12,35 @@ class Institution {
   Institution({required this.id, required this.name});
 }
 
-class EditSchoolScreen extends StatefulWidget {
-  final String? schoolId;
+class AddEditSchoolScreen extends StatefulWidget {
+  final DocumentSnapshot? school;
 
-  const EditSchoolScreen({super.key, this.schoolId});
+  const AddEditSchoolScreen({super.key, this.school});
 
   @override
-  State<EditSchoolScreen> createState() => _EditSchoolScreenState();
+  State<AddEditSchoolScreen> createState() => _AddEditSchoolScreenState();
 }
 
-class _EditSchoolScreenState extends State<EditSchoolScreen> {
+class _AddEditSchoolScreenState extends State<AddEditSchoolScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _cepController = TextEditingController();
-  final _addressController = TextEditingController();
-  final _addressNumberController = TextEditingController();
-  final _addressDistrictController = TextEditingController();
-  final _addressCityController = TextEditingController();
-  final _addressStateController = TextEditingController();
+  late TextEditingController _nameController;
+  late TextEditingController _adminNameController;
+  late TextEditingController _contactPhoneController;
+  late TextEditingController _cepController;
+  late TextEditingController _addressController;
+  late TextEditingController _cityController;
   
-  // --- NOVOS CONTROLLERS PARA METAS ---
-  final _goalKgController = TextEditingController();
-  final _goalStartDateController = TextEditingController();
-  final _goalEndDateController = TextEditingController();
+  // Controllers para metas
+  late TextEditingController _goalKgController;
+  late TextEditingController _goalStartDateController;
+  late TextEditingController _goalEndDateController;
 
+  String _selectedSchoolType = 'particular';
   bool _isLoading = true;
-  bool get _isEditing => widget.schoolId != null;
+  bool get _isEditing => widget.school != null;
 
-  // Variáveis para o dropdown de instituições
   List<Institution> _institutionsList = [];
   Institution? _selectedInstitution;
-  
-  // --- NOVAS VARIÁVEIS DE ESTADO PARA DATAS ---
   DateTime? _startDate;
   DateTime? _endDate;
 
@@ -56,30 +52,15 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
     super.initState();
     _loadInitialData();
   }
-
-  // --- NOVO MÉTODO DISPOSE PARA LIMPAR OS CONTROLLERS ---
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _phoneController.dispose();
-    _cepController.dispose();
-    _addressController.dispose();
-    _addressNumberController.dispose();
-    _addressDistrictController.dispose();
-    _addressCityController.dispose();
-    _addressStateController.dispose();
-    _goalKgController.dispose();
-    _goalStartDateController.dispose();
-    _goalEndDateController.dispose();
-    super.dispose();
-  }
-
+  
   Future<void> _loadInitialData() async {
+    // Carrega a lista de instituições primeiro
     await _fetchInstitutions();
-    if (_isEditing) {
-      await _loadSchoolData();
-    }
-    if (mounted) setState(() => _isLoading = false);
+    
+    // Agora popula o formulário
+    _populateFormFields();
+
+    if(mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _fetchInstitutions() async {
@@ -87,47 +68,89 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
       final snapshot = await FirebaseFirestore.instance.collection('institutions').orderBy('institutionName').get();
       _institutionsList = snapshot.docs.map((doc) => Institution(id: doc.id, name: doc.data()['institutionName'] ?? 'Nome não encontrado')).toList();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar instituições: $e')));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar instituições: $e')));
     }
   }
 
-  Future<void> _loadSchoolData() async {
+  void _populateFormFields() {
+    final data = widget.school?.data() as Map<String, dynamic>?;
+
+    _nameController = TextEditingController(text: data?['schoolName'] ?? '');
+    _adminNameController = TextEditingController(text: data?['adminName'] ?? '');
+    _contactPhoneController = TextEditingController(text: data?['contactPhone'] ?? '');
+    _cepController = TextEditingController(text: data?['cep'] ?? '');
+    _addressController = TextEditingController(text: data?['address'] ?? '');
+    _cityController = TextEditingController(text: data?['city'] ?? '');
+    _selectedSchoolType = data?['schoolType'] ?? 'particular';
+
+    // Popula a instituição selecionada se estiver a editar
+    final institutionId = data?['institutionId'];
+    if (institutionId != null) {
+      // Procura na lista já carregada
+      _selectedInstitution = _institutionsList.where((i) => i.id == institutionId).firstOrNull;
+    }
+    
+    // Popula os campos de meta
+    _goalKgController = TextEditingController(text: (data?['goalKg'] as num?)?.toString() ?? '');
+    _startDate = (data?['goalStartDate'] as Timestamp?)?.toDate();
+    _endDate = (data?['goalEndDate'] as Timestamp?)?.toDate();
+    _goalStartDateController = TextEditingController(text: _startDate != null ? DateFormat('dd/MM/yyyy').format(_startDate!) : '');
+    _goalEndDateController = TextEditingController(text: _endDate != null ? DateFormat('dd/MM/yyyy').format(_endDate!) : '');
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _adminNameController.dispose();
+    _contactPhoneController.dispose();
+    _cepController.dispose();
+    _addressController.dispose();
+    _cityController.dispose();
+    _goalKgController.dispose();
+    _goalStartDateController.dispose();
+    _goalEndDateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveSchool() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+
     try {
-      final doc = await FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).get();
-      if (doc.exists && doc.data() != null) {
-        final data = doc.data()!;
-        _nameController.text = data['schoolName'] ?? '';
-        _phoneController.text = data['schoolPhone'] ?? '';
-        _cepController.text = data['cep'] ?? '';
-        _addressController.text = data['address']?.split(',').first ?? '';
-        _addressNumberController.text = data['address']?.split(',').length > 1 ? data['address'].split(',')[1].trim() : '';
-        _addressDistrictController.text = data['schoolDistrict'] ?? '';
-        _addressCityController.text = data['city'] ?? '';
-        _addressStateController.text = data['schoolState'] ?? '';
-
-        final institutionId = data['institutionId'];
-        if (institutionId != null) {
-          _selectedInstitution = _institutionsList.where((i) => i.id == institutionId).firstOrNull;
-        }
+      final schoolData = {
+        'schoolName': _nameController.text.trim(),
+        'adminName': _adminNameController.text.trim(),
+        'contactPhone': _contactPhoneController.text.trim(),
+        'cep': _cepController.text.trim(),
+        'address': _addressController.text.trim(),
+        'city': _cityController.text.trim(),
+        'schoolType': _selectedSchoolType,
+        'institutionId': _selectedInstitution?.id, // Salva o ID da instituição
+        'totalCollectedKg': _isEditing ? (widget.school!.data() as Map<String, dynamic>)['totalCollectedKg'] ?? 0 : 0,
         
-        // --- CARREGA DADOS DA META ---
-        _goalKgController.text = (data['goalKg'] as num?)?.toString() ?? '';
-        _startDate = (data['goalStartDate'] as Timestamp?)?.toDate();
-        _endDate = (data['goalEndDate'] as Timestamp?)?.toDate();
+        'goalKg': double.tryParse(_goalKgController.text.replaceAll(',', '.')) ?? 0.0,
+        'goalStartDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
+        'goalEndDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
+      };
 
-        if (_startDate != null) {
-          _goalStartDateController.text = DateFormat('dd/MM/yyyy').format(_startDate!);
-        }
-        if (_endDate != null) {
-          _goalEndDateController.text = DateFormat('dd/MM/yyyy').format(_endDate!);
-        }
+      if (_isEditing) {
+        await FirebaseFirestore.instance.collection('schools').doc(widget.school!.id).update(schoolData);
+      } else {
+        schoolData['createdAt'] = Timestamp.now();
+        await FirebaseFirestore.instance.collection('schools').add(schoolData);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Escola salva com sucesso!"), backgroundColor: Colors.green));
+        Navigator.pop(context);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar dados: $e')));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erro ao salvar escola: ${e.toString()}"), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
-
-  // --- NOVA FUNÇÃO PARA SELECIONAR DATA ---
+  
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
     final picked = await showDatePicker(
       context: context,
@@ -148,131 +171,74 @@ class _EditSchoolScreenState extends State<EditSchoolScreen> {
     }
   }
 
-  Future<void> _saveSchool() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-
-    final schoolData = {
-      'schoolName': _nameController.text.trim(),
-      'schoolPhone': _phoneController.text.trim(),
-      'cep': _cepController.text.trim(),
-      'address': '${_addressController.text.trim()}, ${_addressNumberController.text.trim()}',
-      'schoolDistrict': _addressDistrictController.text.trim(),
-      'city': _addressCityController.text.trim(),
-      'schoolState': _addressStateController.text.trim(),
-      'institutionId': _selectedInstitution?.id,
-      
-      // --- SALVA OS NOVOS CAMPOS DE META ---
-      'goalKg': double.tryParse(_goalKgController.text.replaceAll(',', '.')) ?? 0.0,
-      'goalStartDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
-      'goalEndDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
-
-      if (!_isEditing) 'createdAt': FieldValue.serverTimestamp(),
-    };
-
-    try {
-      if (_isEditing) {
-        await FirebaseFirestore.instance.collection('schools').doc(widget.schoolId).update(schoolData);
-      } else {
-        await FirebaseFirestore.instance.collection('schools').add(schoolData);
-      }
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Salvo com sucesso!'), backgroundColor: Colors.green));
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Editar Escola/Faculdade' : 'Adicionar Escola/Faculdade'),
-        actions: [ IconButton(icon: const Icon(Icons.save), onPressed: _isLoading ? null : _saveSchool) ],
+        title: Text(_isEditing ? "Editar Escola" : "Adicionar Escola/Faculdade"),
+        actions: [
+          IconButton(icon: const Icon(Icons.save), onPressed: _isLoading ? null : _saveSchool),
+        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16.0),
-                children: [
-                  if (_institutionsList.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 16.0),
-                      child: Text("Nenhuma instituição cadastrada para vincular.", style: TextStyle(color: Colors.amber)),
-                    )
-                  else
-                    DropdownButtonFormField<Institution?>(
-                      value: _selectedInstitution,
-                      decoration: const InputDecoration(labelText: 'Instituição Responsável (Opcional)'),
-                      items: [
-                        const DropdownMenuItem<Institution?>(value: null, child: Text("Nenhuma", style: TextStyle(fontStyle: FontStyle.italic))),
-                        ..._institutionsList.map((institution) {
-                          return DropdownMenuItem<Institution>(value: institution, child: Text(institution.name));
-                        }),
-                      ],
-                      onChanged: (value) => setState(() => _selectedInstitution = value),
-                    ),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nome da Escola/Faculdade'), validator: (v) => v!.isEmpty ? 'Campo obrigatório' : null),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _phoneController, decoration: const InputDecoration(labelText: 'Telefone'), keyboardType: TextInputType.phone, inputFormatters: [_phoneMaskFormatter]),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _cepController, decoration: const InputDecoration(labelText: 'CEP'), keyboardType: TextInputType.number, inputFormatters: [_cepMaskFormatter]),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _addressController, decoration: const InputDecoration(labelText: 'Endereço (Rua)')),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _addressNumberController, decoration: const InputDecoration(labelText: 'Número'), keyboardType: TextInputType.number),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _addressDistrictController, decoration: const InputDecoration(labelText: 'Bairro')),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _addressCityController, decoration: const InputDecoration(labelText: 'Cidade')),
-                  const SizedBox(height: 16),
-                  TextFormField(controller: _addressStateController, decoration: const InputDecoration(labelText: 'Estado')),
-
-                  // --- NOVA SEÇÃO DE METAS NO FORMULÁRIO ---
-                  const Divider(height: 32, thickness: 1),
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 16.0),
-                    child: Text("Meta Trimestral", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ),
-                  TextFormField(
-                    controller: _goalKgController,
-                    decoration: const InputDecoration(labelText: 'Meta de Arrecadação (Kg)'),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _goalStartDateController,
-                          decoration: const InputDecoration(labelText: 'Data de Início da Meta'),
-                          readOnly: true,
-                          onTap: () => _selectDate(context, true),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _goalEndDateController,
-                          decoration: const InputDecoration(labelText: 'Data de Fim da Meta'),
-                          readOnly: true,
-                          onTap: () => _selectDate(context, false),
-                        ),
-                      ),
+      body: _isLoading 
+        ? const Center(child: CircularProgressIndicator())
+        : Form(
+            key: _formKey,
+            child: ListView(
+              padding: const EdgeInsets.all(16.0),
+              children: [
+                // ESTA É A LÓGICA QUE MOSTRA O CAMPO DE SELEÇÃO
+                if (_institutionsList.isNotEmpty)
+                  DropdownButtonFormField<Institution?>(
+                    value: _selectedInstitution,
+                    decoration: const InputDecoration(labelText: 'Instituição Responsável (Opcional)'),
+                    items: [
+                      const DropdownMenuItem<Institution?>(value: null, child: Text("Nenhuma", style: TextStyle(fontStyle: FontStyle.italic))),
+                      ..._institutionsList.map((institution) => DropdownMenuItem<Institution>(value: institution, child: Text(institution.name))),
                     ],
+                    onChanged: (v) => setState(() => _selectedInstitution = v),
                   ),
-                ],
-              ),
+                
+                const SizedBox(height: 16),
+                TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: 'Nome da Escola/Faculdade'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedSchoolType,
+                  decoration: const InputDecoration(labelText: 'Tipo de Escola'),
+                  items: const [
+                    DropdownMenuItem(value: 'municipal', child: Text('Municipal')),
+                    DropdownMenuItem(value: 'estadual', child: Text('Estadual')),
+                    DropdownMenuItem(value: 'particular', child: Text('Particular')),
+                    DropdownMenuItem(value: 'faculdade', child: Text('Faculdade')),
+                  ],
+                  onChanged: (v) => setState(() => _selectedSchoolType = v!),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(controller: _adminNameController, decoration: const InputDecoration(labelText: 'Nome do Admin da Escola'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                const SizedBox(height: 16),
+                TextFormField(controller: _contactPhoneController, decoration: const InputDecoration(labelText: 'Telefone de Contato'), inputFormatters: [_phoneMaskFormatter], keyboardType: TextInputType.phone, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                const SizedBox(height: 16),
+                TextFormField(controller: _cepController, decoration: const InputDecoration(labelText: 'CEP'), inputFormatters: [_cepMaskFormatter], keyboardType: TextInputType.number, validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                const SizedBox(height: 16),
+                TextFormField(controller: _cityController, decoration: const InputDecoration(labelText: 'Cidade'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                const SizedBox(height: 16),
+                TextFormField(controller: _addressController, decoration: const InputDecoration(labelText: 'Endereço Completo (Rua, Número, Bairro)'), validator: (v) => v!.isEmpty ? 'Obrigatório' : null),
+                
+                const Divider(height: 32),
+                const Text("Meta Trimestral", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                TextFormField(controller: _goalKgController, decoration: const InputDecoration(labelText: 'Meta de Arrecadação (Kg)'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(child: TextFormField(controller: _goalStartDateController, decoration: const InputDecoration(labelText: 'Data de Início da Meta'), readOnly: true, onTap: () => _selectDate(context, true))),
+                    const SizedBox(width: 16),
+                    Expanded(child: TextFormField(controller: _goalEndDateController, decoration: const InputDecoration(labelText: 'Data de Fim da Meta'), readOnly: true, onTap: () => _selectDate(context, false))),
+                  ],
+                ),
+              ],
             ),
+          ),
     );
   }
 }

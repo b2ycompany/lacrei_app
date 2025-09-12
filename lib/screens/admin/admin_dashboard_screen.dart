@@ -1,5 +1,4 @@
 // lib/screens/admin/admin_dashboard_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -111,7 +110,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     html.Url.revokeObjectUrl(url);
   }
 
-  // --- CORREÇÃO 2: A função _logout agora não recebe 'context' e usa o do State ---
   Future<void> _logout() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -121,13 +119,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       await FirebaseAuth.instance.signOut();
       
       if (!mounted) return;
-      // Usando o 'context' do State, que é seguro após a verificação 'mounted'
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const ProfileSelectionScreen()),
         (route) => false,
       );
     } catch (e) {
-      // Lidar com o erro, por exemplo, mostrando uma SnackBar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao sair: ${e.toString()}')));
       }
@@ -144,7 +140,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sair',
-            onPressed: _logout, // A chamada agora é direta, sem passar o context
+            onPressed: _logout,
           ),
         ],
       ),
@@ -199,13 +195,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             GridView.count(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2, 
+              crossAxisCount: 2,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
               childAspectRatio: 1.2,
               children: [
                   _buildApprovalCard(context),
                   
+                  // O NOVO CARD "LANÇAR COLETA" ESTÁ AQUI
                   _buildDashboardCard(
                     context: context,
                     icon: Icons.scale_outlined,
@@ -230,7 +227,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     context: context,
                     icon: Icons.monetization_on,
                     label: "Planos de Patrocínio",
-                    // --- CORREÇÃO 1: 'text' foi substituído por 'context' ---
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SponsorshipPlansScreen())),
                   ),
                   _buildDashboardCard(
